@@ -1,0 +1,39 @@
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Android / Gradle
+.gradle/
+build/
+*/build/
+local.properties
+*.apk
+*.aab
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Demo/runtime outputs
+backend/app/data/exports/*
+!backend/app/data/exports/.gitkeep
+demo-assets/videos/*
+!demo-assets/videos/.gitkeep
+demo-assets/apk/*
+!demo-assets/apk/.gitkeep
+
