@@ -27,8 +27,11 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,12 +44,15 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.eldercareapp.R
 import com.example.eldercareapp.ui.component.ElderBackground
 import com.example.eldercareapp.ui.component.ElderBlue
@@ -62,6 +68,7 @@ import com.example.eldercareapp.ui.component.ProgressDot
 import com.example.eldercareapp.ui.component.SectionTitle
 import com.example.eldercareapp.ui.component.SoftCard
 import com.example.eldercareapp.ui.component.TwoColumnRow
+import com.example.eldercareapp.viewmodel.ChatViewModel
 
 private enum class AppScreen {
     Home,
@@ -73,41 +80,69 @@ private enum class AppScreen {
 @Composable
 fun ElderCareAppRoot(modifier: Modifier = Modifier) {
     var screen by remember { mutableStateOf(AppScreen.Home) }
+    var selectedFontSize by remember { mutableStateOf("大字体") }
+    val chatViewModel: ChatViewModel = viewModel()
+    val currentDensity = LocalDensity.current
+    val fontScale = when (selectedFontSize) {
+        "小字体" -> 0.9f
+        "中字体" -> 1.0f
+        "超大字体" -> 1.3f
+        else -> 1.15f
+    }
 
     BackHandler(enabled = screen != AppScreen.Home) {
         screen = AppScreen.Home
     }
 
-    when (screen) {
-        AppScreen.Home -> HomeScreen(
-            modifier = modifier,
-            onOpenFontSize = { screen = AppScreen.FontSize },
-            onOpenMaterialList = { screen = AppScreen.MaterialList },
-            onOpenGuide = { screen = AppScreen.OperationGuide }
+    CompositionLocalProvider(
+        LocalDensity provides Density(
+            density = currentDensity.density,
+            fontScale = fontScale
         )
+    ) {
+        when (screen) {
+            AppScreen.Home -> HomeScreen(
+                modifier = modifier,
+                chatViewModel = chatViewModel,
+                onOpenFontSize = { screen = AppScreen.FontSize },
+                onOpenMaterialList = { screen = AppScreen.MaterialList },
+                onOpenGuide = { screen = AppScreen.OperationGuide }
+            )
 
-        AppScreen.FontSize -> FontSizeScreen(modifier = modifier)
-        AppScreen.MaterialList -> MaterialListScreen(modifier = modifier)
-        AppScreen.OperationGuide -> OperationGuideScreen(
-            modifier = modifier,
-            onClose = { screen = AppScreen.Home }
-        )
+            AppScreen.FontSize -> FontSizeScreen(
+                selected = selectedFontSize,
+                onSelected = { selectedFontSize = it },
+                onBack = { screen = AppScreen.Home },
+                modifier = modifier
+            )
+
+            AppScreen.MaterialList -> MaterialListScreen(
+                onBack = { screen = AppScreen.Home },
+                modifier = modifier
+            )
+
+            AppScreen.OperationGuide -> OperationGuideScreen(
+                modifier = modifier,
+                onClose = { screen = AppScreen.Home }
+            )
+        }
     }
 }
 
 @Composable
 private fun HomeScreen(
+    chatViewModel: ChatViewModel,
     onOpenFontSize: () -> Unit,
     onOpenMaterialList: () -> Unit,
     onOpenGuide: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val chatUiState by chatViewModel.uiState.collectAsState()
     var language by remember { mutableStateOf("普通话") }
     var place by remember { mutableStateOf("全部") }
     var direction by remember { mutableStateOf("全部") }
     var faqCategory by remember { mutableStateOf("全部") }
-    var question by remember { mutableStateOf("") }
     val toast: (String) -> Unit = { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
 
     Column(
@@ -161,16 +196,19 @@ private fun HomeScreen(
                 selectedCategory = faqCategory,
                 onCategorySelected = { faqCategory = it },
                 onQuestionClick = {
-                    question = it
-                    toast("已选择常见问题")
+                    chatViewModel.updateInput(it)
+                    chatViewModel.sendQuestion()
                 }
             )
 
             QuestionInputSection(
-                value = question,
-                onValueChange = { question = it },
-                onSend = { toast("发送功能为静态展示") },
-                onVoice = { toast("语音提问功能为静态展示") }
+                value = chatUiState.input,
+                onValueChange = chatViewModel::updateInput,
+                onSend = chatViewModel::sendQuestion,
+                onVoice = { toast("语音功能下一阶段接入，请先使用文字输入") },
+                isLoading = chatUiState.isLoading,
+                answer = chatUiState.answer,
+                errorMessage = chatUiState.errorMessage
             )
 
             PrimaryActionButton(
@@ -391,54 +429,122 @@ private fun QuestionInputSection(
     value: String,
     onValueChange: (String) -> Unit,
     onSend: () -> Unit,
-    onVoice: () -> Unit
+    onVoice: () -> Unit,
+    isLoading: Boolean,
+    answer: String,
+    errorMessage: String?
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .height(82.dp)
-                .background(Color.White, RoundedCornerShape(12.dp))
-                .border(2.dp, ElderBlue, RoundedCornerShape(12.dp))
-                .padding(horizontal = 20.dp),
-            contentAlignment = Alignment.CenterStart
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                textStyle = TextStyle(color = Color(0xFF172431), fontSize = 21.sp),
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                decorationBox = { innerTextField ->
-                    if (value.isEmpty()) {
-                        Text(text = "请输入您的问题...", color = Color(0xFFA4AFB8), fontSize = 21.sp)
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(82.dp)
+                    .background(Color.White, RoundedCornerShape(12.dp))
+                    .border(2.dp, ElderBlue, RoundedCornerShape(12.dp))
+                    .padding(horizontal = 20.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    textStyle = TextStyle(color = Color(0xFF172431), fontSize = 21.sp),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    enabled = !isLoading,
+                    decorationBox = { innerTextField ->
+                        if (value.isEmpty()) {
+                            Text(text = "请输入您的问题...", color = Color(0xFFA4AFB8), fontSize = 21.sp)
+                        }
+                        innerTextField()
                     }
-                    innerTextField()
-                }
-            )
+                )
+            }
+            Button(
+                onClick = onSend,
+                enabled = !isLoading && value.isNotBlank(),
+                modifier = Modifier
+                    .width(104.dp)
+                    .height(82.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (value.isBlank()) Color(0xFFB9C7D0) else ElderBlue,
+                    disabledContainerColor = Color(0xFFB9C7D0)
+                )
+            ) {
+                Text(text = if (isLoading) "查询中" else "发送", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            }
         }
-        Button(
-            onClick = onSend,
-            modifier = Modifier
-                .width(104.dp)
-                .height(82.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB9C7D0))
-        ) {
-            Text(text = "发送", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(18.dp))
+        PrimaryActionButton(text = "🎤  语音提问", color = ElderBlue, onClick = onVoice)
+        if (isLoading) {
+            Spacer(modifier = Modifier.height(18.dp))
+            SoftCard(borderColor = ElderBlueLight) {
+                Row(
+                    modifier = Modifier.padding(22.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    CircularProgressIndicator(
+                        color = ElderBlue,
+                        modifier = Modifier.size(28.dp),
+                        strokeWidth = 3.dp
+                    )
+                    Text(
+                        text = "正在查询，请稍候...",
+                        color = ElderDeepText,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+        if (!errorMessage.isNullOrBlank()) {
+            Spacer(modifier = Modifier.height(18.dp))
+            SoftCard(borderColor = ElderRed) {
+                Text(
+                    text = errorMessage,
+                    color = ElderRed,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(22.dp)
+                )
+            }
+        }
+        if (answer.isNotBlank()) {
+            Spacer(modifier = Modifier.height(18.dp))
+            SoftCard(borderColor = ElderGreen) {
+                Column(modifier = Modifier.padding(22.dp)) {
+                    Text(
+                        text = "AI 回复",
+                        color = ElderDeepText,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = answer,
+                        color = Color(0xFF172431),
+                        fontSize = 20.sp,
+                        lineHeight = 30.sp
+                    )
+                }
+            }
         }
     }
-    Spacer(modifier = Modifier.height(18.dp))
-    PrimaryActionButton(text = "🎤  语音提问", color = ElderBlue, onClick = onVoice)
 }
 
 @Composable
-private fun FontSizeScreen(modifier: Modifier = Modifier) {
-    var selected by remember { mutableStateOf("大字体") }
+private fun FontSizeScreen(
+    selected: String,
+    onSelected: (String) -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val options = listOf(
         "小字体" to "小",
         "中字体" to "中",
@@ -454,6 +560,8 @@ private fun FontSizeScreen(modifier: Modifier = Modifier) {
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        TopBackButton(onBack = onBack)
+        Spacer(modifier = Modifier.height(16.dp))
         SectionTitle(text = "选择字体大小")
         Spacer(modifier = Modifier.height(20.dp))
         Text(text = "请选择适合您的字体大小", color = Color(0xFF5B6570), fontSize = 22.sp)
@@ -465,7 +573,7 @@ private fun FontSizeScreen(modifier: Modifier = Modifier) {
                         title = rowItems[0].first,
                         sample = rowItems[0].second,
                         selected = selected == rowItems[0].first,
-                        onClick = { selected = rowItems[0].first }
+                        onClick = { onSelected(rowItems[0].first) }
                     )
                 },
                 right = {
@@ -473,7 +581,7 @@ private fun FontSizeScreen(modifier: Modifier = Modifier) {
                         title = rowItems[1].first,
                         sample = rowItems[1].second,
                         selected = selected == rowItems[1].first,
-                        onClick = { selected = rowItems[1].first }
+                        onClick = { onSelected(rowItems[1].first) }
                     )
                 }
             )
@@ -525,7 +633,10 @@ private fun FontOptionCard(
 }
 
 @Composable
-private fun MaterialListScreen(modifier: Modifier = Modifier) {
+private fun MaterialListScreen(
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val context = LocalContext.current
     val items = listOf(
         "🛂" to "办理港澳通行证",
@@ -544,6 +655,8 @@ private fun MaterialListScreen(modifier: Modifier = Modifier) {
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        TopBackButton(onBack = onBack)
+        Spacer(modifier = Modifier.height(16.dp))
         SectionTitle(text = "📋  请选择要办理的事项")
         Spacer(modifier = Modifier.height(24.dp))
         Text(
@@ -614,6 +727,8 @@ private fun OperationGuideScreen(
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        TopBackButton(onBack = onClose)
+        Spacer(modifier = Modifier.height(16.dp))
         SectionTitle(text = "📖  操作指南")
         Spacer(modifier = Modifier.height(18.dp))
         Box(
@@ -689,6 +804,27 @@ private fun OperationGuideScreen(
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF7F7F7), contentColor = Color.Black)
         ) {
             Text(text = "关闭", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun TopBackButton(onBack: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Start
+    ) {
+        Button(
+            onClick = onBack,
+            modifier = Modifier.height(48.dp),
+            shape = RoundedCornerShape(24.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFFEAF3F8),
+                contentColor = ElderDeepText
+            ),
+            elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
+        ) {
+            Text(text = "← 返回", fontSize = 18.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
