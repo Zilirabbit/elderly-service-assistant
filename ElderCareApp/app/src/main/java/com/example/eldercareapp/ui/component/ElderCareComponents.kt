@@ -21,147 +21,459 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-val ElderBlue = Color(0xFF1F5D83)
-val ElderBlueLight = Color(0xFF3396D1)
-val ElderDeepText = Color(0xFF0F4F76)
-val ElderBackground = Color(0xFFF5F7FA)
-val ElderSoftCard = Color(0xFFF4F7FA)
-val ElderGreen = Color(0xFF24A55A)
-val ElderOrange = Color(0xFFF49312)
-val ElderRed = Color(0xFFE34235)
+val ElderBlue = Color(0xFF176BEF)
+val ElderBlueDark = Color(0xFF06245A)
+val ElderBlueSoft = Color(0xFFEAF3FF)
+val ElderBluePale = Color(0xFFF5F9FF)
+val ElderText = Color(0xFF071E49)
+val ElderTextMuted = Color(0xFF637083)
+val ElderLine = Color(0xFFD6E4F7)
+val ElderBackground = Color(0xFFF7FAFE)
+val ElderCard = Color(0xFFFFFFFF)
+val ElderGreen = Color(0xFF139B3A)
+val ElderGreenSoft = Color(0xFFE9F8EE)
+val ElderOrange = Color(0xFFF57C00)
+val ElderOrangeSoft = Color(0xFFFFF3E4)
+val ElderRed = Color(0xFFD93025)
+
+data class TopBarAction(
+    val label: String,
+    val icon: ImageVector,
+    val onClick: () -> Unit
+)
+
+data class BottomNavItemSpec(
+    val label: String,
+    val icon: ImageVector,
+    val selected: Boolean,
+    val onClick: () -> Unit
+)
+
+@Composable
+fun UnifiedTopBar(
+    title: String,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    showBack: Boolean = false,
+    onBack: (() -> Unit)? = null,
+    actions: List<TopBarAction> = emptyList(),
+    elevated: Boolean = false,
+    leadingIcon: ImageVector? = null,
+    gradient: Boolean = false
+) {
+    val backgroundModifier = if (gradient) {
+        Modifier.background(Brush.verticalGradient(listOf(Color(0xFFEAF4FF), Color.White)))
+    } else {
+        Modifier.background(Color.White)
+    }
+
+    Column(
+        modifier = modifier
+            .then(backgroundModifier)
+            .fillMaxWidth()
+            .border(
+                width = if (elevated) 1.dp else 0.dp,
+                color = if (elevated) ElderLine else Color.Transparent
+            )
+            .padding(horizontal = 20.dp, vertical = 16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            if (showBack) {
+                RoundIconButton(
+                    icon = requireNotNull(leadingIcon),
+                    contentDescription = "返回",
+                    onClick = { onBack?.invoke() }
+                )
+            } else {
+                leadingIcon?.let {
+                    Icon(
+                        imageVector = it,
+                        contentDescription = null,
+                        tint = ElderBlue,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    color = ElderText,
+                    fontSize = 26.sp,
+                    lineHeight = 32.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = if (showBack) TextAlign.Center else TextAlign.Start,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (!subtitle.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = subtitle,
+                        color = ElderText,
+                        fontSize = 22.sp,
+                        lineHeight = 28.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            actions.forEach { action ->
+                PillIconButton(
+                    text = action.label,
+                    icon = action.icon,
+                    onClick = action.onClick
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun UnifiedBottomNav(items: List<BottomNavItemSpec>) {
+    NavigationBar(
+        containerColor = Color.White,
+        tonalElevation = 0.dp,
+        modifier = Modifier.border(1.dp, ElderLine)
+    ) {
+        items.forEach { item ->
+            NavigationBarItem(
+                selected = item.selected,
+                onClick = item.onClick,
+                icon = {
+                    Icon(
+                        imageVector = item.icon,
+                        contentDescription = item.label,
+                        modifier = Modifier.size(30.dp)
+                    )
+                },
+                label = {
+                    Text(
+                        text = item.label,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = ElderBlue,
+                    selectedTextColor = ElderBlue,
+                    indicatorColor = ElderBlueSoft,
+                    unselectedIconColor = Color(0xFF7F8898),
+                    unselectedTextColor = Color(0xFF7F8898)
+                )
+            )
+        }
+    }
+}
+
+@Composable
+fun RoundIconButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    tint: Color = ElderText
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = modifier
+            .size(52.dp)
+            .background(Color.White, CircleShape)
+            .border(1.dp, ElderLine, CircleShape)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = tint,
+            modifier = Modifier.size(30.dp)
+        )
+    }
+}
+
+@Composable
+fun PillIconButton(
+    text: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier.height(48.dp),
+        shape = RoundedCornerShape(24.dp),
+        border = BorderStroke(1.5.dp, ElderBlue),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = Color.White,
+            contentColor = ElderBlue
+        )
+    ) {
+        Icon(imageVector = icon, contentDescription = text, modifier = Modifier.size(22.dp))
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(text = text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+    }
+}
 
 @Composable
 fun SectionTitle(
     text: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null
 ) {
-    Column(
+    Row(
         modifier = modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Text(
-            text = text,
-            color = ElderDeepText,
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(8.dp))
         Box(
             modifier = Modifier
-                .width(76.dp)
-                .height(4.dp)
-                .background(ElderBlue, RoundedCornerShape(2.dp))
+                .width(6.dp)
+                .height(32.dp)
+                .background(ElderBlue, RoundedCornerShape(3.dp))
         )
-    }
-}
-
-@Composable
-fun PillButton(
-    text: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val background = if (selected) Color.White else Color.White.copy(alpha = 0.16f)
-    val textColor = if (selected) ElderDeepText else Color.White
-    Box(
-        modifier = modifier
-            .height(58.dp)
-            .shadow(if (selected) 8.dp else 0.dp, RoundedCornerShape(28.dp))
-            .background(background, RoundedCornerShape(28.dp))
-            .border(
-                BorderStroke(2.dp, Color.White.copy(alpha = if (selected) 0f else 0.45f)),
-                RoundedCornerShape(28.dp)
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 22.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(text = text, color = textColor, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-    }
-}
-
-@Composable
-fun PrimaryActionButton(
-    text: String,
-    color: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    height: Dp = 76.dp
-) {
-    Button(
-        onClick = onClick,
-        modifier = modifier
-            .fillMaxWidth()
-            .height(height)
-            .shadow(10.dp, RoundedCornerShape(16.dp)),
-        shape = RoundedCornerShape(16.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = color, contentColor = Color.White),
-        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
-    ) {
-        Text(text = text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        icon?.let {
+            Icon(imageVector = it, contentDescription = null, tint = ElderBlue, modifier = Modifier.size(28.dp))
+        }
+        Text(
+            text = text,
+            color = ElderText,
+            fontSize = 25.sp,
+            lineHeight = 31.sp,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
 
 @Composable
 fun SoftCard(
     modifier: Modifier = Modifier,
-    borderColor: Color = Color.Transparent,
+    containerColor: Color = ElderCard,
+    borderColor: Color = ElderLine,
+    elevation: Dp = 1.dp,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
-        border = if (borderColor == Color.Transparent) null else BorderStroke(2.dp, borderColor),
-        colors = CardDefaults.cardColors(containerColor = ElderSoftCard),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = BorderStroke(1.dp, borderColor),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = elevation),
         content = content
     )
 }
 
 @Composable
-fun InfoRow(text: String) {
-    Text(
-        text = text,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 16.dp),
-        color = Color(0xFF172431),
-        fontSize = 21.sp
-    )
+fun IconBadge(
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    tint: Color = ElderBlue,
+    background: Color = ElderBlueSoft,
+    size: Dp = 64.dp
+) {
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(1.dp)
-            .background(Color(0xFFD9DEE4))
-    )
+        modifier = modifier
+            .size(size)
+            .background(background, CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(size * 0.48f)
+        )
+    }
 }
 
 @Composable
-fun TwoColumnRow(
-    left: @Composable () -> Unit,
-    right: @Composable () -> Unit,
+fun SegmentedControl(
+    options: List<String>,
+    selected: String,
+    onSelected: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
+        modifier = modifier
+            .fillMaxWidth()
+            .background(Color.White, RoundedCornerShape(16.dp))
+            .border(1.dp, ElderLine, RoundedCornerShape(16.dp))
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Box(modifier = Modifier.weight(1f)) { left() }
-        Box(modifier = Modifier.weight(1f)) { right() }
+        options.forEach { option ->
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp)
+                    .background(
+                        if (option == selected) ElderBlue else Color.Transparent,
+                        RoundedCornerShape(13.dp)
+                    )
+                    .clickable { onSelected(option) },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = option,
+                    color = if (option == selected) Color.White else ElderText,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun PrimaryActionButton(
+    text: String,
+    icon: ImageVector? = null,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    height: Dp = 60.dp,
+    color: Color = ElderBlue
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(height),
+        shape = RoundedCornerShape(16.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = color,
+            contentColor = Color.White,
+            disabledContainerColor = Color(0xFFE6ECF4),
+            disabledContentColor = Color(0xFF9AA6B6)
+        ),
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
+    ) {
+        icon?.let {
+            Icon(imageVector = it, contentDescription = text, modifier = Modifier.size(24.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+        }
+        Text(text = text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+fun SecondaryActionButton(
+    text: String,
+    icon: ImageVector? = null,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    height: Dp = 56.dp
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(height),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.5.dp, ElderBlue),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = Color.White,
+            contentColor = ElderBlue
+        )
+    ) {
+        icon?.let {
+            Icon(imageVector = it, contentDescription = text, modifier = Modifier.size(23.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+        }
+        Text(text = text, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+fun ActionCard(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    tint: Color = ElderBlue
+) {
+    SoftCard(
+        modifier = modifier.clickable(onClick = onClick),
+        elevation = 1.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            IconBadge(icon = icon, tint = tint, background = tint.copy(alpha = 0.11f), size = 58.dp)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    color = ElderText,
+                    fontSize = 21.sp,
+                    lineHeight = 26.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(5.dp))
+                Text(
+                    text = subtitle,
+                    color = ElderTextMuted,
+                    fontSize = 17.sp,
+                    lineHeight = 23.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun InfoRow(
+    label: String,
+    value: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    valueColor: Color = ElderText
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Icon(imageVector = icon, contentDescription = null, tint = ElderBlue, modifier = Modifier.size(24.dp))
+        Text(
+            text = label,
+            color = ElderText,
+            fontSize = 18.sp,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = value,
+            color = valueColor,
+            fontSize = 19.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.End
+        )
     }
 }
 
@@ -169,7 +481,7 @@ fun TwoColumnRow(
 fun ProgressDot(active: Boolean) {
     Box(
         modifier = Modifier
-            .size(13.dp)
-            .background(if (active) ElderBlue else Color(0xFFD9D9D9), CircleShape)
+            .size(if (active) 14.dp else 12.dp)
+            .background(if (active) ElderBlue else Color(0xFFC9DAF4), CircleShape)
     )
 }

@@ -1,5 +1,6 @@
 package com.example.eldercareapp.api
 
+import com.example.eldercareapp.BuildConfig
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -7,12 +8,14 @@ import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
 object ApiClient {
-    // 真机联调：手机通过电脑 WLAN 地址访问 FastAPI。
-    // 如果切回官方模拟器，改成 http://10.0.2.2:8080/。
-    private const val BASE_URL = "http://172.21.77.249:8080/"
+    // Android 模拟器访问宿主电脑本机：-PELDERCARE_BASE_URL=http://10.0.2.2:8080/
+    // 真机联调访问电脑局域网 IP：-PELDERCARE_BASE_URL=http://192.168.1.23:8080/
+    private val baseUrl = BuildConfig.ELDERCARE_BASE_URL.let { url ->
+        if (url.endsWith("/")) url else "$url/"
+    }
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
-        level = HttpLoggingInterceptor.Level.BODY
+        level = HttpLoggingInterceptor.Level.BASIC
     }
 
     private val okHttpClient = OkHttpClient.Builder()
@@ -24,7 +27,7 @@ object ApiClient {
 
     val assistantApi: AssistantApi by lazy {
         Retrofit.Builder()
-            .baseUrl(BASE_URL)
+            .baseUrl(baseUrl)
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()

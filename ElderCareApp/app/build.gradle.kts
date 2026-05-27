@@ -19,6 +19,11 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        val eldercareBaseUrl = providers.gradleProperty("ELDERCARE_BASE_URL")
+            .orElse("http://10.0.2.2:8080/")
+            .get()
+        buildConfigField("String", "ELDERCARE_BASE_URL", "\"$eldercareBaseUrl\"")
     }
 
     compileOptions {
@@ -27,6 +32,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     buildTypes {
@@ -44,6 +50,7 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
+    implementation("androidx.compose.material:material-icons-extended")
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
