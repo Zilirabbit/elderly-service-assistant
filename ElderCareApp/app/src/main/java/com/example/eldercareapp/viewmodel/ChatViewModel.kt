@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.eldercareapp.api.ApiClient
 import com.example.eldercareapp.model.ChatPolicyRequest
+import com.example.eldercareapp.model.TtsSynthesizeRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,6 +27,8 @@ data class ChatUiState(
     val voiceDraft: String? = null,
     val ttsText: String = "",
     val ttsAudioUrl: String? = null,
+    val lastVoiceSampleName: String = "",
+    val lastVoiceSampleSizeBytes: Long = 0L,
     val isLoading: Boolean = false,
     val isTranscribing: Boolean = false,
     val errorMessage: String? = null,
@@ -101,18 +104,20 @@ class ChatViewModel : ViewModel() {
         }
     }
 
-    fun transcribeVoice(file: File, language: String) {
+    fun transcribeVoice(file: File, language: String, sampleName: String = "") {
         if (_uiState.value.isTranscribing) return
 
         _uiState.value = _uiState.value.copy(
             isTranscribing = true,
             errorMessage = null,
             voiceDraft = null,
+            lastVoiceSampleName = sampleName.ifBlank { file.name },
+            lastVoiceSampleSizeBytes = file.length(),
         )
 
         viewModelScope.launch {
             try {
-                val audioBody = file.asRequestBody("audio/mp4".toMediaTypeOrNull())
+                val audioBody = file.asRequestBody(mediaTypeForAudioFile(file).toMediaTypeOrNull())
                 val audioPart = MultipartBody.Part.createFormData("file", file.name, audioBody)
                 val languageBody = language.toRequestBody("text/plain".toMediaTypeOrNull())
                 val userIdBody = "demo-user-001".toRequestBody("text/plain".toMediaTypeOrNull())
@@ -122,7 +127,7 @@ class ChatViewModel : ViewModel() {
                     userId = userIdBody,
                 )
                 val recognizedText = response.original_text.trim()
-                if (recognizedText.isBlank()) {
+                if (!isMeaningfulVoiceText(recognizedText)) {
                     _uiState.value = _uiState.value.copy(
                         isTranscribing = false,
                         errorMessage = "没有听清，请重新说一遍或手动输入。",
@@ -148,7 +153,7 @@ class ChatViewModel : ViewModel() {
         }
     }
 
-    fun confirmVoiceDraft() {
+    fun confirmVoiceDraft(ttsLanguage: String = "zh-CN") {
         val draft = _uiState.value.voiceDraft?.trim().orEmpty()
         if (draft.isBlank()) return
 
@@ -157,7 +162,7 @@ class ChatViewModel : ViewModel() {
             voiceDraft = null,
             errorMessage = null,
         )
-        sendQuestion(inputType = "voice")
+        sendQuestion(inputType = "voice", ttsLanguage = ttsLanguage)
     }
 
     fun clearVoiceDraft() {
@@ -171,6 +176,16 @@ class ChatViewModel : ViewModel() {
             voiceDraft = null,
             errorMessage = null,
         )
+    }
+
+    suspend fun synthesizeSpeech(text: String, language: String = "zh-CN"): String? {
+        val response = ApiClient.assistantApi.synthesizeTts(
+            TtsSynthesizeRequest(
+                text = text,
+                language = language,
+            )
+        )
+        return response.audio_url
     }
 
     private fun classifyError(exc: Exception): String {
@@ -201,6 +216,49 @@ class ChatViewModel : ViewModel() {
             is IOException -> "网络好像不太稳定，请检查手机和电脑是否在同一网络。"
             else -> "语音识别暂时没有响应，请重新说一遍或手动输入。"
         }
+    }
+
+    private fun mediaTypeForAudioFile(file: File): String {
+        return when (file.extension.lowercase()) {
+            "wav" -> "audio/wav"
+            "mp3" -> "audio/mpeg"
+            "aac" -> "audio/aac"
+            "webm" -> "audio/webm"
+            "mp4" -> "audio/mp4"
+            else -> "audio/mp4"
+        }
+    }
+
+    private fun isMeaningfulVoiceText(value: String): Boolean {
+        val normalized = value
+            .lowercase()
+            .replace(Regex("""[\s,，.。!！?？、~～…]+"""), "")
+        if (normalized.isBlank()) return false
+        if (normalized.length <= 1) return false
+
+        val fillerWords = setOf(
+            "嗯",
+            "嗯嗯",
+            "嗯哼",
+            "呃",
+            "呃呃",
+            "啊",
+            "啊啊",
+            "哦",
+            "喔",
+            "额",
+            "唔",
+            "唔唔",
+            "hm",
+            "hmm",
+            "uh",
+            "um",
+            "er",
+        )
+        if (normalized in fillerWords) return false
+
+        val fillerChars = setOf('嗯', '呃', '啊', '哦', '喔', '额', '唔')
+        return normalized.any { it !in fillerChars }
     }
 
     private fun cleanMarkdownAnswer(raw: String): String {

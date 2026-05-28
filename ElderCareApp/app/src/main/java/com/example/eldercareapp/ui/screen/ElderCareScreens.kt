@@ -1,9 +1,14 @@
 package com.example.eldercareapp.ui.screen
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
-import android.speech.tts.TextToSpeech
-import android.speech.tts.UtteranceProgressListener
+import android.media.AudioAttributes
+import android.media.MediaPlayer
+import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.provider.OpenableColumns
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -45,6 +50,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.PlayArrow
@@ -53,6 +59,8 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Checkbox
@@ -68,6 +76,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -78,11 +87,13 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.eldercareapp.api.ApiClient
 import com.example.eldercareapp.model.MaterialChecklist
 import com.example.eldercareapp.ui.component.ActionCard
 import com.example.eldercareapp.ui.component.BottomNavItemSpec
@@ -115,7 +126,9 @@ import com.example.eldercareapp.viewmodel.ChatViewModel
 import com.example.eldercareapp.viewmodel.MaterialViewModel
 import com.example.eldercareapp.viewmodel.SavedMaterialChecklist
 import com.example.eldercareapp.voice.VoiceRecorder
+import java.io.File
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 private enum class MainTab {
     Home,
@@ -131,7 +144,10 @@ private enum class OverlayScreen {
     MaterialList
 }
 
-private val voiceLanguageOptions = listOf("普通话", "方言免切换", "英语")
+private val voiceLanguageOptions = listOf("普通话", "方言", "英语")
+private const val SpeechTargetAnswer = "answer"
+private const val SpeechTargetVoiceDraft = "voice_draft"
+private const val SpeechTargetGuide = "guide"
 
 private fun voiceLanguageCode(label: String): String {
     return when (label) {
@@ -139,6 +155,170 @@ private fun voiceLanguageCode(label: String): String {
         "英语" -> "en"
         else -> "auto"
     }
+}
+
+private fun ttsLanguageCode(label: String): String {
+    return when (label) {
+        "英语" -> "en"
+        "方言" -> "yue"
+        else -> "zh-CN"
+    }
+}
+
+private class CloudSpeechController(
+    val activeTarget: String?,
+    val isPreparing: Boolean,
+    val isSpeaking: Boolean,
+    val speak: (text: String, target: String, audioUrl: String?, language: String) -> Unit,
+    val stop: () -> Unit,
+) {
+    fun isPreparingTarget(target: String): Boolean = isPreparing && activeTarget == target
+    fun isSpeakingTarget(target: String): Boolean = isSpeaking && activeTarget == target
+    fun isActiveTarget(target: String): Boolean = activeTarget == target && (isPreparing || isSpeaking)
+}
+
+@Composable
+private fun rememberCloudSpeechController(
+    chatViewModel: ChatViewModel,
+    language: String = "zh-CN",
+): CloudSpeechController {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val mainHandler = remember { Handler(Looper.getMainLooper()) }
+    var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
+    var activeTarget by remember { mutableStateOf<String?>(null) }
+    var isPreparing by remember { mutableStateOf(false) }
+    var isSpeaking by remember { mutableStateOf(false) }
+    var speechRequestId by remember { mutableIntStateOf(0) }
+
+    fun clearSpeechState() {
+        mediaPlayer?.release()
+        mediaPlayer = null
+        activeTarget = null
+        isPreparing = false
+        isSpeaking = false
+    }
+
+    fun stopSpeaking() {
+        speechRequestId += 1
+        clearSpeechState()
+    }
+
+    fun showUnavailableToast() {
+        Toast.makeText(context, "朗读服务暂时不可用，请稍后再试", Toast.LENGTH_SHORT).show()
+    }
+
+    fun playAudioUrl(audioUrl: String, target: String, requestId: Int) {
+        val playableUrl = ApiClient.absoluteUrl(audioUrl)
+        mediaPlayer?.release()
+
+        val player = MediaPlayer()
+        mediaPlayer = player
+        activeTarget = target
+        isPreparing = true
+        isSpeaking = false
+
+        try {
+            player.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .build()
+            )
+            player.setDataSource(playableUrl)
+            player.setOnPreparedListener { prepared ->
+                mainHandler.post {
+                    if (mediaPlayer == prepared && speechRequestId == requestId && activeTarget == target) {
+                        isPreparing = false
+                        isSpeaking = true
+                        prepared.start()
+                    } else {
+                        prepared.release()
+                    }
+                }
+            }
+            player.setOnCompletionListener { completed ->
+                mainHandler.post {
+                    if (mediaPlayer == completed && speechRequestId == requestId) {
+                        clearSpeechState()
+                    }
+                }
+            }
+            player.setOnErrorListener { failed, _, _ ->
+                mainHandler.post {
+                    if (mediaPlayer == failed && speechRequestId == requestId) {
+                        clearSpeechState()
+                        showUnavailableToast()
+                    }
+                }
+                true
+            }
+            player.prepareAsync()
+        } catch (_: Exception) {
+            clearSpeechState()
+            showUnavailableToast()
+        }
+    }
+
+    fun speak(text: String, target: String, audioUrl: String?, requestedLanguage: String) {
+        val content = text.trim()
+        if (content.isBlank()) {
+            Toast.makeText(context, "暂无可朗读内容", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        stopSpeaking()
+        speechRequestId += 1
+        val requestId = speechRequestId
+        activeTarget = target
+
+        val existingUrl = audioUrl?.takeIf { it.isNotBlank() }
+        if (existingUrl != null) {
+            playAudioUrl(existingUrl, target, requestId)
+            return
+        }
+
+        isPreparing = true
+        isSpeaking = false
+        coroutineScope.launch {
+            try {
+                val generatedUrl = chatViewModel.synthesizeSpeech(
+                    text = content,
+                    language = requestedLanguage.ifBlank { language },
+                )
+                if (speechRequestId != requestId || activeTarget != target) {
+                    return@launch
+                }
+                if (generatedUrl.isNullOrBlank()) {
+                    clearSpeechState()
+                    showUnavailableToast()
+                    return@launch
+                }
+                playAudioUrl(generatedUrl, target, requestId)
+            } catch (_: Exception) {
+                if (speechRequestId == requestId && activeTarget == target) {
+                    clearSpeechState()
+                    showUnavailableToast()
+                }
+            }
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            clearSpeechState()
+        }
+    }
+
+    return CloudSpeechController(
+        activeTarget = activeTarget,
+        isPreparing = isPreparing,
+        isSpeaking = isSpeaking,
+        speak = { text, target, audioUrl, requestedLanguage ->
+            speak(text, target, audioUrl, requestedLanguage)
+        },
+        stop = { stopSpeaking() },
+    )
 }
 
 private data class FontChoice(
@@ -206,6 +386,7 @@ fun ElderCareAppRoot(modifier: Modifier = Modifier) {
 
                 OverlayScreen.Guide -> GuideScreen(
                     modifier = modifier,
+                    chatViewModel = chatViewModel,
                     onBack = closeOverlay,
                     onDone = closeOverlay
                 )
@@ -406,38 +587,13 @@ private fun ChatScreen(
     val context = LocalContext.current
     val voiceRecorder = remember { VoiceRecorder() }
     var showVoicePanel by remember { mutableStateOf(false) }
-    var selectedVoiceLanguage by remember { mutableStateOf("方言免切换") }
+    var selectedVoiceLanguage by remember { mutableStateOf("普通话") }
     var isRecording by remember { mutableStateOf(false) }
-    var textToSpeech by remember { mutableStateOf<TextToSpeech?>(null) }
-    var ttsReady by remember { mutableStateOf(false) }
-    var isSpeaking by remember { mutableStateOf(false) }
+    val speech = rememberCloudSpeechController(chatViewModel)
 
-    DisposableEffect(context) {
-        val tts = TextToSpeech(context) { status ->
-            ttsReady = status == TextToSpeech.SUCCESS
-        }
-        tts.setLanguage(Locale.SIMPLIFIED_CHINESE)
-        tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(utteranceId: String?) {
-                isSpeaking = true
-            }
-
-            override fun onDone(utteranceId: String?) {
-                isSpeaking = false
-            }
-
-            @Deprecated("Deprecated in Java")
-            override fun onError(utteranceId: String?) {
-                isSpeaking = false
-            }
-        })
-        textToSpeech = tts
-
+    DisposableEffect(Unit) {
         onDispose {
             voiceRecorder.cancel()
-            tts.stop()
-            tts.shutdown()
-            textToSpeech = null
         }
     }
 
@@ -449,6 +605,24 @@ private fun ChatScreen(
         } else {
             Toast.makeText(context, "需要麦克风权限才能语音提问", Toast.LENGTH_SHORT).show()
         }
+    }
+    val audioSampleLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+
+        val sampleFile = copyAudioSampleToCache(context, uri)
+        if (sampleFile == null) {
+            Toast.makeText(context, "音频样本读取失败，请换一个文件", Toast.LENGTH_SHORT).show()
+            return@rememberLauncherForActivityResult
+        }
+
+        showVoicePanel = false
+        chatViewModel.transcribeVoice(
+            file = sampleFile,
+            language = voiceLanguageCode(selectedVoiceLanguage),
+            sampleName = getDisplayNameForUri(context, uri)
+        )
     }
 
     fun openVoicePanel() {
@@ -481,37 +655,13 @@ private fun ChatScreen(
             Toast.makeText(context, "录音时间太短，请重新说一遍", Toast.LENGTH_SHORT).show()
             return
         }
-        chatViewModel.transcribeVoice(file, voiceLanguageCode(selectedVoiceLanguage))
+        chatViewModel.transcribeVoice(file, voiceLanguageCode(selectedVoiceLanguage), "现场录音")
     }
 
     fun stopRecording() {
         voiceRecorder.cancel()
         isRecording = false
         showVoicePanel = false
-    }
-
-    fun speak(text: String) {
-        val content = text.trim()
-        if (content.isBlank()) {
-            Toast.makeText(context, "暂无可朗读内容", Toast.LENGTH_SHORT).show()
-            return
-        }
-        if (!ttsReady) {
-            Toast.makeText(context, "朗读功能正在准备，请稍后再试", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val utteranceId = "policy_answer_${System.currentTimeMillis()}"
-        val result = textToSpeech?.speak(content, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
-        if (result == TextToSpeech.SUCCESS) {
-            isSpeaking = true
-        } else {
-            Toast.makeText(context, "朗读启动失败，请稍后再试", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    fun stopSpeaking() {
-        textToSpeech?.stop()
-        isSpeaking = false
     }
 
     Column(
@@ -543,9 +693,17 @@ private fun ChatScreen(
                     body = "您可以询问港澳通行证续签材料、过关流程、口岸开放时间和交通路线。我会尽量用简单的话说明。",
                     source = "资料来源：粤同心政策知识库",
                     onOpenMaterialList = onOpenMaterialList,
-                    onReadAnswer = { speak("您可以询问港澳通行证续签材料、过关流程、口岸开放时间和交通路线。我会尽量用简单的话说明。") },
-                    onStopReading = { stopSpeaking() },
-                    isSpeaking = isSpeaking
+                    onReadAnswer = {
+                        speech.speak(
+                            "您可以询问港澳通行证续签材料、过关流程、口岸开放时间和交通路线。我会尽量用简单的话说明。",
+                            SpeechTargetAnswer,
+                            null,
+                            "zh-CN"
+                        )
+                    },
+                    onStopReading = { speech.stop() },
+                    isPreparing = speech.isPreparingTarget(SpeechTargetAnswer),
+                    isSpeaking = speech.isSpeakingTarget(SpeechTargetAnswer)
                 )
             } else {
                 UserBubble(text = uiState.input.ifBlank { "港澳通行证续签需要什么材料？" })
@@ -557,6 +715,13 @@ private fun ChatScreen(
 
             if (uiState.isTranscribing) {
                 LoadingCard(text = "正在识别您的语音，请稍候...")
+            }
+
+            if (uiState.lastVoiceSampleName.isNotBlank()) {
+                VoiceSampleInfoCard(
+                    name = uiState.lastVoiceSampleName,
+                    sizeBytes = uiState.lastVoiceSampleSizeBytes
+                )
             }
 
             uiState.errorMessage?.takeIf { it.isNotBlank() }?.let { message ->
@@ -586,21 +751,47 @@ private fun ChatScreen(
                     body = uiState.answer,
                     source = sourceText(uiState.sourceDocuments),
                     onOpenMaterialList = onOpenMaterialList,
-                    onReadAnswer = { speak(spokenText) },
-                    onStopReading = { stopSpeaking() },
-                    isSpeaking = isSpeaking
+                    onReadAnswer = {
+                        speech.speak(
+                            spokenText,
+                            SpeechTargetAnswer,
+                            uiState.ttsAudioUrl,
+                            "zh-CN"
+                        )
+                    },
+                    onStopReading = { speech.stop() },
+                    isPreparing = speech.isPreparingTarget(SpeechTargetAnswer),
+                    isSpeaking = speech.isSpeakingTarget(SpeechTargetAnswer)
                 )
             }
 
             uiState.voiceDraft?.let { draft ->
                 VoiceConfirmCard(
                     draft = draft,
-                    onConfirm = chatViewModel::confirmVoiceDraft,
+                    onReadDraft = {
+                        speech.speak(
+                            draft,
+                            SpeechTargetVoiceDraft,
+                            null,
+                            ttsLanguageCode(selectedVoiceLanguage)
+                        )
+                    },
+                    onStopReading = { speech.stop() },
+                    isPreparing = speech.isPreparingTarget(SpeechTargetVoiceDraft),
+                    isSpeaking = speech.isSpeakingTarget(SpeechTargetVoiceDraft),
+                    onConfirm = {
+                        speech.stop()
+                        chatViewModel.confirmVoiceDraft(ttsLanguageCode(selectedVoiceLanguage))
+                    },
                     onRetry = {
+                        speech.stop()
                         chatViewModel.clearVoiceDraft()
                         showVoicePanel = true
                     },
-                    onEdit = chatViewModel::editVoiceDraft
+                    onEdit = {
+                        speech.stop()
+                        chatViewModel.editVoiceDraft()
+                    }
                 )
             }
 
@@ -619,6 +810,7 @@ private fun ChatScreen(
                     isRecording = isRecording,
                     enabled = !uiState.isLoading && !uiState.isTranscribing,
                     onStartRecording = { startRecording() },
+                    onPickSample = { audioSampleLauncher.launch("audio/*") },
                     onStopRecording = { stopRecordingAndUpload() },
                     onCancel = { stopRecording() }
                 )
@@ -812,9 +1004,10 @@ private fun PortDetailScreen(
 private fun GuideScreen(
     onBack: () -> Unit,
     onDone: () -> Unit,
+    chatViewModel: ChatViewModel,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
+    val speech = rememberCloudSpeechController(chatViewModel)
     var stepIndex by remember { mutableIntStateOf(0) }
     val steps = listOf(
         GuideStep(Icons.Filled.Email, "第 1 步：点击提问", "在首页点击“点击提问”，进入智能问答页面。"),
@@ -824,6 +1017,10 @@ private fun GuideScreen(
         GuideStep(Icons.Filled.List, "第 5 步：保存或继续办理", "您可以查看材料清单、朗读回答，或请家人帮忙确认。")
     )
     val current = steps[stepIndex]
+    val guideText = "${current.title}。${current.body}"
+    val guideIsPreparing = speech.isPreparingTarget(SpeechTargetGuide)
+    val guideIsSpeaking = speech.isSpeakingTarget(SpeechTargetGuide)
+    val guideIsActive = speech.isActiveTarget(SpeechTargetGuide)
 
     ScreenColumn(
         modifier = modifier.safeDrawingPadding(),
@@ -832,7 +1029,10 @@ private fun GuideScreen(
                 title = "操作指南",
                 showBack = true,
                 leadingIcon = Icons.Filled.ArrowBack,
-                onBack = onBack,
+                onBack = {
+                    speech.stop()
+                    onBack()
+                },
                 elevated = true
             )
         }
@@ -860,9 +1060,19 @@ private fun GuideScreen(
                     textAlign = TextAlign.Center
                 )
                 SecondaryActionButton(
-                    text = "朗读本步",
-                    icon = Icons.Filled.PlayArrow,
-                    onClick = { Toast.makeText(context, "朗读功能暂未开放", Toast.LENGTH_SHORT).show() },
+                    text = when {
+                        guideIsPreparing -> "准备朗读..."
+                        guideIsSpeaking -> "停止朗读"
+                        else -> "朗读本步"
+                    },
+                    icon = if (guideIsActive) Icons.Filled.Stop else Icons.Filled.PlayArrow,
+                    onClick = {
+                        if (guideIsActive) {
+                            speech.stop()
+                        } else {
+                            speech.speak(guideText, SpeechTargetGuide, null, "zh-CN")
+                        }
+                    },
                     height = 54.dp
                 )
             }
@@ -898,8 +1108,10 @@ private fun GuideScreen(
             icon = if (stepIndex == steps.lastIndex) Icons.Filled.Check else Icons.Filled.KeyboardArrowRight,
             onClick = {
                 if (stepIndex == steps.lastIndex) {
+                    speech.stop()
                     onDone()
                 } else {
+                    speech.stop()
                     stepIndex++
                 }
             }
@@ -907,7 +1119,10 @@ private fun GuideScreen(
         SecondaryActionButton(
             text = "关闭",
             icon = Icons.Filled.Close,
-            onClick = onDone
+            onClick = {
+                speech.stop()
+                onDone()
+            }
         )
     }
 }
@@ -1287,9 +1502,11 @@ private fun AssistantAnswerCard(
     onOpenMaterialList: () -> Unit,
     onReadAnswer: () -> Unit,
     onStopReading: () -> Unit,
+    isPreparing: Boolean,
     isSpeaking: Boolean
 ) {
     val context = LocalContext.current
+    val isReadingActive = isPreparing || isSpeaking
     SoftCard(containerColor = ElderBluePale, borderColor = Color(0xFFBFD8FF)) {
         Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(
@@ -1308,9 +1525,13 @@ private fun AssistantAnswerCard(
             Text(text = source, color = ElderTextMuted, fontSize = 16.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 SecondaryActionButton(
-                    if (isSpeaking) "停止朗读" else "朗读回答",
-                    if (isSpeaking) Icons.Filled.Close else Icons.Filled.PlayArrow,
-                    if (isSpeaking) onStopReading else onReadAnswer,
+                    when {
+                        isPreparing -> "准备朗读..."
+                        isSpeaking -> "停止朗读"
+                        else -> "朗读回答"
+                    },
+                    if (isReadingActive) Icons.Filled.Stop else Icons.Filled.VolumeUp,
+                    if (isReadingActive) onStopReading else onReadAnswer,
                     modifier = Modifier.weight(1f),
                     height = 52.dp
                 )
@@ -1377,26 +1598,145 @@ private fun LoadingCard(text: String = "正在查询官方资料，请稍候..."
 }
 
 @Composable
+private fun VoiceSampleInfoCard(name: String, sizeBytes: Long) {
+    val sizeText = formatVoiceDebugSize(sizeBytes)
+    SoftCard(containerColor = Color.White, borderColor = Color(0xFFD9E8FF), elevation = 0.dp) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                IconBadge(icon = Icons.Filled.Mic, size = 42.dp)
+                Text(
+                    text = "音频样本：$sizeText",
+                    color = ElderText,
+                    fontSize = 19.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            Text(
+                text = name,
+                color = ElderTextMuted,
+                fontSize = 14.sp,
+                lineHeight = 20.sp
+            )
+        }
+    }
+}
+
+private fun formatVoiceDebugSize(sizeBytes: Long): String {
+    if (sizeBytes <= 0L) return "0 B"
+    if (sizeBytes < 1024L) return "$sizeBytes B"
+    val kb = sizeBytes / 1024.0
+    if (kb < 1024.0) return String.format(Locale.US, "%.1f KB", kb)
+    return String.format(Locale.US, "%.1f MB", kb / 1024.0)
+}
+
+private fun copyAudioSampleToCache(context: Context, uri: Uri): File? {
+    val displayName = getDisplayNameForUri(context, uri)
+    val extension = displayName.substringAfterLast('.', missingDelimiterValue = "m4a")
+        .lowercase()
+        .takeIf { it.length in 2..5 }
+        ?: "m4a"
+    val sampleDir = File(context.cacheDir, "voice_samples")
+    sampleDir.mkdirs()
+    val sampleFile = File.createTempFile("voice_sample_", ".$extension", sampleDir)
+
+    return try {
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            sampleFile.outputStream().use { output -> input.copyTo(output) }
+        } ?: return null
+        sampleFile.takeIf { it.exists() && it.length() > 0L }
+    } catch (_: Exception) {
+        sampleFile.delete()
+        null
+    }
+}
+
+private fun getDisplayNameForUri(context: Context, uri: Uri): String {
+    val projection = arrayOf(OpenableColumns.DISPLAY_NAME)
+    context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+        val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+        if (index >= 0 && cursor.moveToFirst()) {
+            return cursor.getString(index).orEmpty().ifBlank { uri.lastPathSegment.orEmpty() }
+        }
+    }
+    return uri.lastPathSegment.orEmpty().ifBlank { "音频样本" }
+}
+
+@Composable
 private fun VoiceConfirmCard(
     draft: String,
+    onReadDraft: () -> Unit,
+    onStopReading: () -> Unit,
+    isPreparing: Boolean,
+    isSpeaking: Boolean,
     onConfirm: () -> Unit,
     onRetry: () -> Unit,
     onEdit: () -> Unit
 ) {
+    val isReadingActive = isPreparing || isSpeaking
     SoftCard(containerColor = ElderBluePale, borderColor = Color(0xFFBFD8FF)) {
-        Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text(
-                text = "我听到的是：$draft",
-                color = ElderText,
-                fontSize = 22.sp,
-                lineHeight = 32.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                PrimaryActionButton("正确，继续", Icons.Filled.Check, onConfirm, modifier = Modifier.weight(1f), height = 54.dp)
-                SecondaryActionButton("重新说一遍", Icons.Filled.Refresh, onRetry, modifier = Modifier.weight(1f), height = 54.dp)
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                IconBadge(icon = Icons.Filled.Mic, size = 50.dp)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "我听到的是",
+                        color = ElderText,
+                        fontSize = 22.sp,
+                        lineHeight = 28.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "请确认后发送",
+                        color = ElderTextMuted,
+                        fontSize = 16.sp,
+                        lineHeight = 22.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
-            SecondaryActionButton("手动修改", Icons.Filled.Edit, onEdit, height = 54.dp)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.White, RoundedCornerShape(14.dp))
+                    .border(1.dp, ElderLine, RoundedCornerShape(14.dp))
+                    .padding(horizontal = 16.dp, vertical = 14.dp)
+            ) {
+                Text(
+                    text = draft,
+                    color = ElderText,
+                    fontSize = 21.sp,
+                    lineHeight = 30.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                SecondaryActionButton(
+                    when {
+                        isPreparing -> "准备中"
+                        isSpeaking -> "停止"
+                        else -> "朗读"
+                    },
+                    if (isReadingActive) Icons.Filled.Stop else Icons.Filled.VolumeUp,
+                    if (isReadingActive) onStopReading else onReadDraft,
+                    modifier = Modifier.weight(1f),
+                    height = 52.dp
+                )
+                SecondaryActionButton("重说", Icons.Filled.Refresh, onRetry, modifier = Modifier.weight(1f), height = 52.dp)
+                SecondaryActionButton("修改", Icons.Filled.Edit, onEdit, modifier = Modifier.weight(1f), height = 52.dp)
+            }
+            PrimaryActionButton("确认发送", Icons.Filled.Check, onConfirm, height = 54.dp)
         }
     }
 }
@@ -1408,6 +1748,7 @@ private fun VoiceInputPanel(
     isRecording: Boolean,
     enabled: Boolean,
     onStartRecording: () -> Unit,
+    onPickSample: () -> Unit,
     onStopRecording: () -> Unit,
     onCancel: () -> Unit
 ) {
@@ -1418,7 +1759,7 @@ private fun VoiceInputPanel(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 IconBadge(
-                    icon = Icons.Filled.Call,
+                    icon = Icons.Filled.Mic,
                     tint = if (isRecording) ElderRed else ElderBlue,
                     background = if (isRecording) Color(0xFFFFE8E5) else ElderBlueSoft,
                     size = 54.dp
@@ -1428,13 +1769,17 @@ private fun VoiceInputPanel(
                         text = if (isRecording) "正在听您说话" else "语音提问",
                         color = ElderText,
                         fontSize = 23.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = if (isRecording) "说完后点击下方按钮开始识别" else "请选择语种，然后点击说话",
+                        text = if (isRecording) "说完后点停止" else "选择语种后说话",
                         color = ElderTextMuted,
                         fontSize = 17.sp,
-                        lineHeight = 24.sp
+                        lineHeight = 24.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
                 Box(
@@ -1455,8 +1800,8 @@ private fun VoiceInputPanel(
             )
 
             PrimaryActionButton(
-                text = if (isRecording) "说完了，开始识别" else "点击说话",
-                icon = if (isRecording) Icons.Filled.Check else Icons.Filled.Call,
+                text = if (isRecording) "停止并识别" else "开始说话",
+                icon = if (isRecording) Icons.Filled.Stop else Icons.Filled.Mic,
                 onClick = if (isRecording) onStopRecording else onStartRecording,
                 enabled = enabled,
                 height = 58.dp,
@@ -1464,9 +1809,16 @@ private fun VoiceInputPanel(
             )
             if (isRecording) {
                 SecondaryActionButton(
-                    text = "取消录音",
+                    text = "取消",
                     icon = Icons.Filled.Close,
                     onClick = onCancel,
+                    height = 52.dp
+                )
+            } else {
+                SecondaryActionButton(
+                    text = "选择音频样本",
+                    icon = Icons.Filled.Search,
+                    onClick = onPickSample,
                     height = 52.dp
                 )
             }
@@ -1498,7 +1850,7 @@ private fun ChatInputBar(
                 .clickable(enabled = enabled, onClick = onVoice),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Filled.Call, contentDescription = "语音输入", tint = Color.White, modifier = Modifier.size(30.dp))
+            Icon(Icons.Filled.Mic, contentDescription = "语音输入", tint = Color.White, modifier = Modifier.size(30.dp))
         }
         Box(
             modifier = Modifier

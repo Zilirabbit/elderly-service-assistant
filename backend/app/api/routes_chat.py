@@ -8,6 +8,7 @@ from app.config import settings
 from app.schemas.chat_schema import ChatPolicyRequest, ChatPolicyResponse, SourceItem, TtsInfo
 from app.services.dify_service import dify_service
 from app.services.qwen_text_service import qwen_text_service
+from app.services.tts_service import TtsSynthesisError, tts_service
 
 router = APIRouter(prefix="/api/v1", tags=["chat"])
 logger = logging.getLogger("app.chat")
@@ -135,6 +136,28 @@ async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
         )
         tts_text = display_text
 
+    tts_audio_url = None
+    tts_cached = False
+    tts_voice = settings.tts_default_voice
+    if tts_text:
+        try:
+            tts_audio = await tts_service.synthesize(text=tts_text, language=tts_language)
+            tts_audio_url = tts_audio.audio_url
+            tts_cached = tts_audio.cached
+            tts_voice = tts_audio.voice
+            usage["tts_synthesis"] = {
+                "cached": tts_audio.cached,
+                "audio_url": tts_audio.audio_url,
+                "voice": tts_audio.voice,
+            }
+        except (TtsSynthesisError, httpx.HTTPError) as exc:
+            logger.warning(
+                "chat_policy tts_synthesis_fallback user_id=%s tts_length=%s error_type=%s",
+                user_id,
+                len(tts_text),
+                type(exc).__name__,
+            )
+
     duration_ms = int((perf_counter() - started_at) * 1000)
     logger.info(
         "chat_policy success duration_ms=%s user_id=%s message_length=%s search_query_length=%s answer_length=%s source_count=%s",
@@ -154,10 +177,10 @@ async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
         display_text=display_text,
         tts=TtsInfo(
             language=tts_language,
-            voice=settings.tts_default_voice,
+            voice=tts_voice,
             text=tts_text,
-            audio_url=None,
-            cached=False,
+            audio_url=tts_audio_url,
+            cached=tts_cached,
         ),
         sources=sources,
         usage=usage,

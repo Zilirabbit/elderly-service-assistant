@@ -33,4 +33,15 @@ object ApiClient {
             .build()
             .create(AssistantApi::class.java)
     }
+
+    fun absoluteUrl(pathOrUrl: String): String {
+        val cleanValue = pathOrUrl.trim()
+        if (cleanValue.startsWith("http://") || cleanValue.startsWith("https://")) {
+            return cleanValue
+        }
+
+        val cleanBase = baseUrl.trimEnd('/')
+        val cleanPath = cleanValue.trimStart('/')
+        return "$cleanBase/$cleanPath"
+    }
 }

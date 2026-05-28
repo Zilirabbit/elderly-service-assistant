@@ -6,6 +6,8 @@ import com.example.eldercareapp.model.MaterialChecklist
 import com.example.eldercareapp.model.MaterialItem
 import com.example.eldercareapp.model.SaveMaterialRequest
 import com.example.eldercareapp.model.SaveMaterialResponse
+import com.example.eldercareapp.model.TtsSynthesizeRequest
+import com.example.eldercareapp.model.TtsSynthesizeResponse
 import com.example.eldercareapp.model.VoiceTranscribeResponse
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
@@ -22,6 +24,9 @@ interface AssistantApi {
 
     @POST("api/v1/chat-policy")
     suspend fun chatPolicy(@Body request: ChatPolicyRequest): ChatPolicyResponse
+
+    @POST("api/v1/tts/synthesize")
+    suspend fun synthesizeTts(@Body request: TtsSynthesizeRequest): TtsSynthesizeResponse
 
     @Multipart
     @POST("api/v1/asr/transcribe")

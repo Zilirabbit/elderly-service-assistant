@@ -19,7 +19,7 @@ class SourceItem(BaseModel):
 
 class TtsInfo(BaseModel):
     language: str = "zh-CN"
-    voice: str = "mandarin_elder_friendly"
+    voice: str = "longxiaochun_v3"
     text: str = ""
     audio_url: str | None = None
     cached: bool = False

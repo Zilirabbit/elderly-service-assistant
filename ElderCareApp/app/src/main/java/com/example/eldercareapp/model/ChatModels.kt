@@ -27,8 +27,22 @@ data class ChatPolicyResponse(
 
 data class TtsInfo(
     val language: String? = "zh-CN",
-    val voice: String? = "mandarin_elder_friendly",
+    val voice: String? = "longxiaochun_v3",
     val text: String? = "",
+    val audio_url: String? = null,
+    val cached: Boolean = false,
+)
+
+data class TtsSynthesizeRequest(
+    val text: String,
+    val language: String = "zh-CN",
+    val voice: String? = null,
+)
+
+data class TtsSynthesizeResponse(
+    val text: String = "",
+    val language: String? = "zh-CN",
+    val voice: String? = "longxiaochun_v3",
     val audio_url: String? = null,
     val cached: Boolean = false,
 )

@@ -16,8 +16,16 @@ class Settings(BaseSettings):
     asr_timeout_seconds: int = 60
     asr_max_file_size_bytes: int = 15 * 1024 * 1024
 
-    tts_cloud_enabled: bool = False
-    tts_default_voice: str = "mandarin_elder_friendly"
+    tts_cloud_enabled: bool = True
+    tts_default_voice: str = "longxiaochun_v3"
+    tts_model: str = "cosyvoice-v3-flash"
+    tts_endpoint: str = "https://dashscope.aliyuncs.com/api/v1/services/audio/tts/SpeechSynthesizer"
+    tts_audio_format: str = "mp3"
+    tts_sample_rate: int = 24000
+    tts_speech_rate: float = 0.9
+    tts_volume: int = 70
+    tts_timeout_seconds: int = 60
+    tts_cache_enabled: bool = True
 
     dify_base_url: str = "http://localhost"
     dify_api_key: str = ""
