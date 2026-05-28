@@ -5,8 +5,9 @@ import httpx
 from fastapi import APIRouter, HTTPException
 
 from app.config import settings
-from app.schemas.chat_schema import ChatPolicyRequest, ChatPolicyResponse, SourceItem
+from app.schemas.chat_schema import ChatPolicyRequest, ChatPolicyResponse, SourceItem, TtsInfo
 from app.services.dify_service import dify_service
+from app.services.qwen_text_service import qwen_text_service
 
 router = APIRouter(prefix="/api/v1", tags=["chat"])
 logger = logging.getLogger("app.chat")
@@ -17,10 +18,47 @@ async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
     started_at = perf_counter()
     message_length = len(req.message)
     user_id = req.user_id or settings.default_user_id
+    original_text = req.message.strip()
+    tts_language = req.tts_language or "zh-CN"
+
+    try:
+        query_result = await qwen_text_service.rewrite_query(original_text)
+    except httpx.TimeoutException as exc:
+        duration_ms = int((perf_counter() - started_at) * 1000)
+        logger.warning(
+            "chat_policy qwen_rewrite_timeout duration_ms=%s user_id=%s message_length=%s",
+            duration_ms,
+            user_id,
+            message_length,
+        )
+        raise HTTPException(status_code=504, detail="查询改写响应超时，请稍后再试") from exc
+    except httpx.HTTPStatusError as exc:
+        duration_ms = int((perf_counter() - started_at) * 1000)
+        status_code = exc.response.status_code if exc.response is not None else None
+        logger.warning(
+            "chat_policy qwen_rewrite_http_error duration_ms=%s user_id=%s message_length=%s dashscope_status=%s",
+            duration_ms,
+            user_id,
+            message_length,
+            status_code,
+        )
+        raise HTTPException(status_code=502, detail="查询改写服务调用失败") from exc
+    except httpx.HTTPError as exc:
+        duration_ms = int((perf_counter() - started_at) * 1000)
+        logger.warning(
+            "chat_policy qwen_rewrite_unavailable duration_ms=%s user_id=%s message_length=%s error_type=%s",
+            duration_ms,
+            user_id,
+            message_length,
+            type(exc).__name__,
+        )
+        raise HTTPException(status_code=502, detail="查询改写服务暂时不可用") from exc
+
+    search_query = query_result.text or original_text
 
     try:
         dify_result = await dify_service.send_chat_message(
-            message=req.message,
+            message=search_query,
             conversation_id=req.conversation_id or "",
             user_id=user_id,
         )
@@ -65,11 +103,14 @@ async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
         )
         raise HTTPException(status_code=500, detail="后端服务暂时不可用") from exc
 
-    answer = dify_result.get("answer") or ""
+    display_text = dify_result.get("answer") or ""
     conversation_id = dify_result.get("conversation_id") or ""
     metadata = dify_result.get("metadata") or {}
     retriever_resources = metadata.get("retriever_resources") or []
-    usage = metadata.get("usage") or {}
+    usage = {
+        "dify": metadata.get("usage") or {},
+        "query_rewrite": query_result.usage,
+    }
 
     sources = [
         SourceItem(
@@ -80,19 +121,44 @@ async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
         for item in retriever_resources
     ]
 
+    try:
+        tts_result = await qwen_text_service.rewrite_tts_text(display_text, tts_language) if display_text else None
+        tts_text = tts_result.text if tts_result and tts_result.text else display_text
+        if tts_result:
+            usage["tts_rewrite"] = tts_result.usage
+    except httpx.HTTPError as exc:
+        logger.warning(
+            "chat_policy tts_rewrite_fallback user_id=%s display_length=%s error_type=%s",
+            user_id,
+            len(display_text),
+            type(exc).__name__,
+        )
+        tts_text = display_text
+
     duration_ms = int((perf_counter() - started_at) * 1000)
     logger.info(
-        "chat_policy success duration_ms=%s user_id=%s message_length=%s answer_length=%s source_count=%s",
+        "chat_policy success duration_ms=%s user_id=%s message_length=%s search_query_length=%s answer_length=%s source_count=%s",
         duration_ms,
         user_id,
         message_length,
-        len(answer),
+        len(search_query),
+        len(display_text),
         len(sources),
     )
 
     return ChatPolicyResponse(
-        answer=answer,
+        answer=display_text,
         conversation_id=conversation_id,
+        original_text=original_text,
+        search_query=search_query,
+        display_text=display_text,
+        tts=TtsInfo(
+            language=tts_language,
+            voice=settings.tts_default_voice,
+            text=tts_text,
+            audio_url=None,
+            cached=False,
+        ),
         sources=sources,
         usage=usage,
     )

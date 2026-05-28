@@ -7,6 +7,18 @@ class Settings(BaseSettings):
     app_host: str = "0.0.0.0"
     app_port: int = 8080
 
+    dashscope_api_key: str = ""
+    qwen_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    qwen_model: str = "qwen-plus"
+    qwen_timeout_seconds: int = 30
+
+    asr_model: str = "qwen3-asr-flash"
+    asr_timeout_seconds: int = 60
+    asr_max_file_size_bytes: int = 15 * 1024 * 1024
+
+    tts_cloud_enabled: bool = False
+    tts_default_voice: str = "mandarin_elder_friendly"
+
     dify_base_url: str = "http://localhost"
     dify_api_key: str = ""
     dify_chat_path: str = "/v1/chat-messages"

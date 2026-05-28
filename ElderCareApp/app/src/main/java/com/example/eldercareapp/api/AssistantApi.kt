@@ -6,8 +6,13 @@ import com.example.eldercareapp.model.MaterialChecklist
 import com.example.eldercareapp.model.MaterialItem
 import com.example.eldercareapp.model.SaveMaterialRequest
 import com.example.eldercareapp.model.SaveMaterialResponse
+import com.example.eldercareapp.model.VoiceTranscribeResponse
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Multipart
+import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.POST
 
@@ -17,6 +22,14 @@ interface AssistantApi {
 
     @POST("api/v1/chat-policy")
     suspend fun chatPolicy(@Body request: ChatPolicyRequest): ChatPolicyResponse
+
+    @Multipart
+    @POST("api/v1/asr/transcribe")
+    suspend fun transcribeVoice(
+        @Part file: MultipartBody.Part,
+        @Part("language") language: RequestBody,
+        @Part("user_id") userId: RequestBody,
+    ): VoiceTranscribeResponse
 
     @GET("api/v1/materials/items")
     suspend fun materialItems(): List<MaterialItem>
