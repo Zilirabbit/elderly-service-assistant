@@ -13,6 +13,8 @@ data class MaterialRequirement(
     val description: String,
     val required: Boolean = true,
     val note: String? = null,
+    val linkedChecklistId: String? = null,
+    val linkedActionLabel: String? = null,
 )
 
 data class MaterialChecklist(

@@ -1,4 +1,5 @@
 import logging
+import re
 from time import perf_counter
 
 import httpx
@@ -10,6 +11,27 @@ from app.services.asr_service import asr_service
 
 router = APIRouter(prefix="/api/v1", tags=["asr"])
 logger = logging.getLogger("app.asr")
+
+FILLER_TRANSCRIPTS = {
+    "嗯",
+    "嗯嗯",
+    "嗯哼",
+    "呃",
+    "呃呃",
+    "啊",
+    "啊啊",
+    "哦",
+    "喔",
+    "额",
+    "唔",
+    "唔唔",
+    "hm",
+    "hmm",
+    "uh",
+    "um",
+    "er",
+}
+FILLER_CHARS = {"嗯", "呃", "啊", "哦", "喔", "额", "唔"}
 
 
 @router.post("/asr/transcribe", response_model=AsrTranscribeResponse)
@@ -70,7 +92,13 @@ async def transcribe_audio(
     finally:
         await file.close()
 
-    if not result.text:
+    if _looks_like_no_speech(result.text):
+        logger.info(
+            "asr_transcribe no_meaningful_speech user_id=%s language=%s text=%s",
+            user,
+            language,
+            result.text,
+        )
         raise HTTPException(status_code=422, detail="没有听清，请重新说一遍或手动输入")
 
     duration_ms = int((perf_counter() - started_at) * 1000)
@@ -88,3 +116,14 @@ async def transcribe_audio(
         usage=result.usage,
         request_id=result.request_id,
     )
+
+
+def _looks_like_no_speech(text: str) -> bool:
+    normalized = re.sub(r"[\s,，.。!！?？、~～…]+", "", (text or "").lower())
+    if not normalized:
+        return True
+    if normalized in FILLER_TRANSCRIPTS:
+        return True
+    if len(normalized) <= 1:
+        return True
+    return all(char in FILLER_CHARS for char in normalized)

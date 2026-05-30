@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -36,6 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -58,6 +60,7 @@ val ElderRed = Color(0xFFD93025)
 data class TopBarAction(
     val label: String,
     val icon: ImageVector,
+    val alwaysShowText: Boolean = false,
     val onClick: () -> Unit
 )
 
@@ -67,6 +70,11 @@ data class BottomNavItemSpec(
     val selected: Boolean,
     val onClick: () -> Unit
 )
+
+enum class CardLayoutMode {
+    List,
+    Grid
+}
 
 @Composable
 fun UnifiedTopBar(
@@ -80,6 +88,7 @@ fun UnifiedTopBar(
     leadingIcon: ImageVector? = null,
     gradient: Boolean = false
 ) {
+    val responsive = LocalElderResponsive.current
     val backgroundModifier = if (gradient) {
         Modifier.background(Brush.verticalGradient(listOf(Color(0xFFEAF4FF), Color.White)))
     } else {
@@ -94,58 +103,105 @@ fun UnifiedTopBar(
                 width = if (elevated) 1.dp else 0.dp,
                 color = if (elevated) ElderLine else Color.Transparent
             )
-            .padding(horizontal = 20.dp, vertical = 16.dp)
+            .padding(horizontal = responsive.pagePadding, vertical = responsive.cardSpacing)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            if (showBack) {
-                RoundIconButton(
-                    icon = requireNotNull(leadingIcon),
-                    contentDescription = "返回",
-                    onClick = { onBack?.invoke() }
-                )
-            } else {
-                leadingIcon?.let {
-                    Icon(
-                        imageVector = it,
-                        contentDescription = null,
-                        tint = ElderBlue,
-                        modifier = Modifier.size(32.dp)
+        if (showBack && responsive.useCenterTitleTopBar) {
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    modifier = Modifier.align(Alignment.CenterStart),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RoundIconButton(
+                        icon = requireNotNull(leadingIcon),
+                        contentDescription = "返回",
+                        onClick = { onBack?.invoke() }
                     )
                 }
-            }
-
-            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
                     color = ElderText,
-                    fontSize = 26.sp,
-                    lineHeight = 32.sp,
+                    fontSize = responsive.topBarTitle,
                     fontWeight = FontWeight.Bold,
-                    textAlign = if (showBack) TextAlign.Center else TextAlign.Start,
-                    modifier = Modifier.fillMaxWidth()
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(horizontal = 72.dp)
                 )
-                if (!subtitle.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = subtitle,
-                        color = ElderText,
-                        fontSize = 22.sp,
-                        lineHeight = 28.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                Row(
+                    modifier = Modifier.align(Alignment.CenterEnd),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(responsive.smallSpacing)
+                ) {
+                    actions.forEach { action ->
+                        PillIconButton(
+                            text = action.label,
+                            icon = action.icon,
+                            onClick = action.onClick,
+                            alwaysShowText = action.alwaysShowText
+                        )
+                    }
                 }
             }
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)
+            ) {
+                if (showBack) {
+                    RoundIconButton(
+                        icon = requireNotNull(leadingIcon),
+                        contentDescription = "返回",
+                        onClick = { onBack?.invoke() }
+                    )
+                } else {
+                    leadingIcon?.let {
+                        Icon(
+                            imageVector = it,
+                            contentDescription = null,
+                            tint = ElderBlue,
+                            modifier = Modifier.size(responsive.iconSmall)
+                        )
+                    }
+                }
 
-            actions.forEach { action ->
-                PillIconButton(
-                    text = action.label,
-                    icon = action.icon,
-                    onClick = action.onClick
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        color = ElderText,
+                        fontSize = responsive.topBarTitle,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Start,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (!subtitle.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(responsive.smallSpacing))
+                        Text(
+                            text = subtitle,
+                            color = ElderText,
+                            fontSize = responsive.topBarSubtitle,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                actions.forEach { action ->
+                    PillIconButton(
+                        text = action.label,
+                        icon = action.icon,
+                        onClick = action.onClick,
+                        alwaysShowText = action.alwaysShowText
+                    )
+                }
             }
         }
     }
@@ -153,6 +209,7 @@ fun UnifiedTopBar(
 
 @Composable
 fun UnifiedBottomNav(items: List<BottomNavItemSpec>) {
+    val responsive = LocalElderResponsive.current
     NavigationBar(
         containerColor = Color.White,
         tonalElevation = 0.dp,
@@ -166,14 +223,16 @@ fun UnifiedBottomNav(items: List<BottomNavItemSpec>) {
                     Icon(
                         imageVector = item.icon,
                         contentDescription = item.label,
-                        modifier = Modifier.size(30.dp)
+                        modifier = Modifier.size(responsive.iconSmall)
                     )
                 },
                 label = {
                     Text(
                         text = item.label,
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold
+                        fontSize = responsive.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 },
                 colors = NavigationBarItemDefaults.colors(
@@ -196,10 +255,11 @@ fun RoundIconButton(
     modifier: Modifier = Modifier,
     tint: Color = ElderText
 ) {
+    val responsive = LocalElderResponsive.current
     IconButton(
         onClick = onClick,
         modifier = modifier
-            .size(52.dp)
+            .size(responsive.iconButtonSize)
             .background(Color.White, CircleShape)
             .border(1.dp, ElderLine, CircleShape)
     ) {
@@ -207,7 +267,7 @@ fun RoundIconButton(
             imageVector = icon,
             contentDescription = contentDescription,
             tint = tint,
-            modifier = Modifier.size(30.dp)
+            modifier = Modifier.size(responsive.iconSmall)
         )
     }
 }
@@ -217,21 +277,42 @@ fun PillIconButton(
     text: String,
     icon: ImageVector,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    alwaysShowText: Boolean = false
 ) {
+    val responsive = LocalElderResponsive.current
+    val showText = alwaysShowText || responsive.showTopBarActionText
+    if (!showText) {
+        RoundIconButton(
+            icon = icon,
+            contentDescription = text,
+            onClick = onClick,
+            modifier = modifier,
+            tint = ElderBlue
+        )
+        return
+    }
     OutlinedButton(
         onClick = onClick,
-        modifier = modifier.height(48.dp),
-        shape = RoundedCornerShape(24.dp),
+        modifier = modifier.heightIn(min = responsive.compactButtonMinHeight),
+        shape = RoundedCornerShape(responsive.controlCorner),
         border = BorderStroke(1.5.dp, ElderBlue),
         colors = ButtonDefaults.outlinedButtonColors(
             containerColor = Color.White,
             contentColor = ElderBlue
         )
     ) {
-        Icon(imageVector = icon, contentDescription = text, modifier = Modifier.size(22.dp))
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(text = text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        Icon(imageVector = icon, contentDescription = text, modifier = Modifier.size(responsive.iconSmall))
+        if (showText) {
+            Spacer(modifier = Modifier.width(responsive.smallSpacing))
+            Text(
+                text = text,
+                fontSize = responsive.label,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 
@@ -241,26 +322,28 @@ fun SectionTitle(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null
 ) {
+    val responsive = LocalElderResponsive.current
     Row(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)
     ) {
         Box(
             modifier = Modifier
                 .width(6.dp)
-                .height(32.dp)
+                .height(30.dp)
                 .background(ElderBlue, RoundedCornerShape(3.dp))
         )
         icon?.let {
-            Icon(imageVector = it, contentDescription = null, tint = ElderBlue, modifier = Modifier.size(28.dp))
+            Icon(imageVector = it, contentDescription = null, tint = ElderBlue, modifier = Modifier.size(responsive.iconSmall))
         }
         Text(
             text = text,
             color = ElderText,
-            fontSize = 25.sp,
-            lineHeight = 31.sp,
-            fontWeight = FontWeight.Bold
+            fontSize = responsive.sectionTitle,
+            fontWeight = FontWeight.Bold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
@@ -273,9 +356,10 @@ fun SoftCard(
     elevation: Dp = 1.dp,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val responsive = LocalElderResponsive.current
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(responsive.cardCorner),
         border = BorderStroke(1.dp, borderColor),
         colors = CardDefaults.cardColors(containerColor = containerColor),
         elevation = CardDefaults.cardElevation(defaultElevation = elevation),
@@ -313,11 +397,12 @@ fun SegmentedControl(
     onSelected: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val responsive = LocalElderResponsive.current
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(Color.White, RoundedCornerShape(16.dp))
-            .border(1.dp, ElderLine, RoundedCornerShape(16.dp))
+            .background(Color.White, RoundedCornerShape(responsive.controlCorner))
+            .border(1.dp, ElderLine, RoundedCornerShape(responsive.controlCorner))
             .padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
@@ -325,10 +410,10 @@ fun SegmentedControl(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(48.dp)
+                    .heightIn(min = responsive.segmentedMinHeight)
                     .background(
                         if (option == selected) ElderBlue else Color.Transparent,
-                        RoundedCornerShape(13.dp)
+                        RoundedCornerShape(responsive.controlCorner)
                     )
                     .clickable { onSelected(option) },
                 contentAlignment = Alignment.Center
@@ -336,9 +421,11 @@ fun SegmentedControl(
                 Text(
                     text = option,
                     color = if (option == selected) Color.White else ElderText,
-                    fontSize = 18.sp,
+                    fontSize = responsive.label,
                     fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -355,13 +442,15 @@ fun PrimaryActionButton(
     height: Dp = 60.dp,
     color: Color = ElderBlue
 ) {
+    val responsive = LocalElderResponsive.current
+    val minHeight = if (height > responsive.buttonMinHeight) height else responsive.buttonMinHeight
     Button(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier
             .fillMaxWidth()
-            .height(height),
-        shape = RoundedCornerShape(16.dp),
+            .heightIn(min = minHeight),
+        shape = RoundedCornerShape(responsive.controlCorner),
         colors = ButtonDefaults.buttonColors(
             containerColor = color,
             contentColor = Color.White,
@@ -371,10 +460,17 @@ fun PrimaryActionButton(
         elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
     ) {
         icon?.let {
-            Icon(imageVector = it, contentDescription = text, modifier = Modifier.size(24.dp))
-            Spacer(modifier = Modifier.width(8.dp))
+            Icon(imageVector = it, contentDescription = text, modifier = Modifier.size(responsive.iconSmall))
+            Spacer(modifier = Modifier.width(responsive.smallSpacing))
         }
-        Text(text = text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text(
+            text = text,
+            fontSize = responsive.bodyLarge,
+            fontWeight = FontWeight.Bold,
+            maxLines = 2,
+            textAlign = TextAlign.Center,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -386,12 +482,14 @@ fun SecondaryActionButton(
     modifier: Modifier = Modifier,
     height: Dp = 56.dp
 ) {
+    val responsive = LocalElderResponsive.current
+    val minHeight = if (height > responsive.compactButtonMinHeight) height else responsive.compactButtonMinHeight
     OutlinedButton(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .height(height),
-        shape = RoundedCornerShape(16.dp),
+            .heightIn(min = minHeight),
+        shape = RoundedCornerShape(responsive.controlCorner),
         border = BorderStroke(1.5.dp, ElderBlue),
         colors = ButtonDefaults.outlinedButtonColors(
             containerColor = Color.White,
@@ -399,10 +497,17 @@ fun SecondaryActionButton(
         )
     ) {
         icon?.let {
-            Icon(imageVector = it, contentDescription = text, modifier = Modifier.size(23.dp))
-            Spacer(modifier = Modifier.width(8.dp))
+            Icon(imageVector = it, contentDescription = text, modifier = Modifier.size(responsive.iconSmall))
+            Spacer(modifier = Modifier.width(responsive.smallSpacing))
         }
-        Text(text = text, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+        Text(
+            text = text,
+            fontSize = responsive.body,
+            fontWeight = FontWeight.Bold,
+            maxLines = 2,
+            textAlign = TextAlign.Center,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -413,33 +518,64 @@ fun ActionCard(
     icon: ImageVector,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    tint: Color = ElderBlue
+    tint: Color = ElderBlue,
+    layoutMode: CardLayoutMode = CardLayoutMode.List
 ) {
+    val responsive = LocalElderResponsive.current
     SoftCard(
         modifier = modifier.clickable(onClick = onClick),
         elevation = 1.dp
     ) {
-        Row(
-            modifier = Modifier.padding(18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            IconBadge(icon = icon, tint = tint, background = tint.copy(alpha = 0.11f), size = 58.dp)
-            Column(modifier = Modifier.weight(1f)) {
+        if (layoutMode == CardLayoutMode.Grid) {
+            Column(
+                modifier = Modifier.padding(responsive.cardPadding),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)
+            ) {
+                IconBadge(icon = icon, tint = tint, background = tint.copy(alpha = 0.11f), size = responsive.iconMedium)
                 Text(
                     text = title,
                     color = ElderText,
-                    fontSize = 21.sp,
-                    lineHeight = 26.sp,
-                    fontWeight = FontWeight.Bold
+                    fontSize = responsive.cardTitle,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center
                 )
-                Spacer(modifier = Modifier.height(5.dp))
                 Text(
                     text = subtitle,
                     color = ElderTextMuted,
-                    fontSize = 17.sp,
-                    lineHeight = 23.sp
+                    fontSize = responsive.label,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center
                 )
+            }
+        } else {
+            Row(
+                modifier = Modifier.padding(responsive.cardPadding),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)
+            ) {
+                IconBadge(icon = icon, tint = tint, background = tint.copy(alpha = 0.11f), size = responsive.iconMedium)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        color = ElderText,
+                        fontSize = responsive.cardTitle,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(responsive.smallSpacing))
+                    Text(
+                        text = subtitle,
+                        color = ElderTextMuted,
+                        fontSize = responsive.label,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
     }
@@ -453,24 +589,25 @@ fun InfoRow(
     modifier: Modifier = Modifier,
     valueColor: Color = ElderText
 ) {
+    val responsive = LocalElderResponsive.current
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 10.dp),
+            .padding(vertical = responsive.smallSpacing),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)
     ) {
-        Icon(imageVector = icon, contentDescription = null, tint = ElderBlue, modifier = Modifier.size(24.dp))
+        Icon(imageVector = icon, contentDescription = null, tint = ElderBlue, modifier = Modifier.size(responsive.iconSmall))
         Text(
             text = label,
             color = ElderText,
-            fontSize = 18.sp,
+            fontSize = responsive.label,
             modifier = Modifier.weight(1f)
         )
         Text(
             text = value,
             color = valueColor,
-            fontSize = 19.sp,
+            fontSize = responsive.body,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.End
         )

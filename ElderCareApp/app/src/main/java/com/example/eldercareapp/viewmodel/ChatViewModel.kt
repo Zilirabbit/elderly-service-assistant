@@ -42,6 +42,25 @@ class ChatViewModel : ViewModel() {
         _uiState.value = _uiState.value.copy(input = value, errorMessage = null)
     }
 
+    fun submitPrefilledQuestion(
+        question: String,
+        inputType: String = "guidance",
+        ttsLanguage: String = "zh-CN",
+    ) {
+        val cleanedQuestion = question.trim()
+        if (cleanedQuestion.isBlank()) {
+            _uiState.value = _uiState.value.copy(errorMessage = "请先输入您想咨询的问题")
+            return
+        }
+
+        _uiState.value = _uiState.value.copy(
+            input = cleanedQuestion,
+            voiceDraft = null,
+            errorMessage = null,
+        )
+        sendQuestion(inputType = inputType, ttsLanguage = ttsLanguage)
+    }
+
     fun sendQuestion(inputType: String = "text", ttsLanguage: String = "zh-CN") {
         val question = _uiState.value.input.trim()
         if (question.isEmpty()) {
