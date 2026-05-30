@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.eldercareapp.api.ApiClient
 import com.example.eldercareapp.model.ChatPolicyRequest
+import com.example.eldercareapp.model.ChatPolicyResponse
+import com.example.eldercareapp.model.QaAnswerUiModel
 import com.example.eldercareapp.model.TtsSynthesizeRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,7 +24,9 @@ import java.net.SocketTimeoutException
 data class ChatUiState(
     val input: String = "",
     val answer: String = "",
+    val answerUiModel: QaAnswerUiModel? = null,
     val conversationId: String = "",
+    val lastQuestion: String = "",
     val sourceDocuments: List<String> = emptyList(),
     val voiceDraft: String? = null,
     val ttsText: String = "",
@@ -68,7 +72,16 @@ class ChatViewModel : ViewModel() {
             return
         }
 
-        _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
+        _uiState.value = _uiState.value.copy(
+            answer = "",
+            answerUiModel = null,
+            lastQuestion = question,
+            sourceDocuments = emptyList(),
+            ttsText = "",
+            ttsAudioUrl = null,
+            isLoading = true,
+            errorMessage = null
+        )
 
         viewModelScope.launch {
             try {
@@ -89,23 +102,32 @@ class ChatViewModel : ViewModel() {
                     _uiState.value = current.copy(
                         input = question,
                         answer = "",
+                        answerUiModel = null,
+                        lastQuestion = question,
                         sourceDocuments = emptyList(),
                         voiceDraft = null,
                         ttsText = "",
                         ttsAudioUrl = null,
                         isLoading = false,
-                        errorMessage = "资料中暂时没有明确答案，建议咨询人工窗口。",
+                        errorMessage = "暂时没有在知识库中找到明确说明。建议咨询当地出入境窗口或官方渠道。",
                     )
                     return@launch
                 }
 
+                val sourceDocuments = response.sources
+                    .mapNotNull { source ->
+                        source.title?.takeIf { it.isNotBlank() }
+                            ?: source.document_name?.takeIf { it.isNotBlank() }
+                    }
+                    .distinct()
+
                 _uiState.value = current.copy(
                     input = question,
                     answer = cleanedAnswer,
+                    answerUiModel = response.toQaAnswerUiModel(cleanedAnswer, sourceDocuments),
                     conversationId = response.conversation_id.orEmpty(),
-                    sourceDocuments = response.sources
-                        .mapNotNull { it.document_name?.takeIf { name -> name.isNotBlank() } }
-                        .distinct(),
+                    lastQuestion = question,
+                    sourceDocuments = sourceDocuments,
                     voiceDraft = null,
                     ttsText = cleanMarkdownAnswer(response.tts?.text?.takeIf { it.isNotBlank() } ?: cleanedAnswer),
                     ttsAudioUrl = response.tts?.audio_url,
@@ -207,17 +229,100 @@ class ChatViewModel : ViewModel() {
         return response.audio_url
     }
 
+    private fun ChatPolicyResponse.toQaAnswerUiModel(
+        cleanedAnswer: String,
+        sourceDocuments: List<String>
+    ): QaAnswerUiModel {
+        val structuredConclusion = listOfNotNull(
+            conclusion.cleanTextOrNull(),
+            summary.cleanTextOrNull()
+        ).firstOrNull()
+        val stepsFromResponse = steps.cleanedItems()
+        val requiredFromResponse = (materials?.required.orEmpty() + required_materials).cleanedItems()
+        val optionalFromResponse = (
+            materials?.possible_extra.orEmpty() +
+                materials?.optional.orEmpty() +
+                optional_materials
+            ).cleanedItems()
+        val warningsFromResponse = warnings.cleanedItems().ifEmpty {
+            listOf("具体要求以当地出入境管理部门或现场窗口为准。")
+        }
+        val sourceTitle = source_title.cleanTextOrNull()
+            ?: sourceDocuments.mapNotNull { friendlySourceTitle(it) }.firstOrNull()
+            ?: "知识库资料"
+
+        return QaAnswerUiModel(
+            conclusion = structuredConclusion ?: conciseConclusion(cleanedAnswer),
+            steps = stepsFromResponse,
+            requiredMaterials = requiredFromResponse,
+            optionalMaterials = optionalFromResponse,
+            warnings = warningsFromResponse,
+            sourceTitle = sourceTitle,
+            originalAnswer = cleanedAnswer,
+            confidence = confidence.cleanTextOrNull(),
+            needHumanReminder = true
+        )
+    }
+
+    private fun List<String>.cleanedItems(): List<String> {
+        return mapNotNull { it.cleanTextOrNull() }.distinct()
+    }
+
+    private fun String?.cleanTextOrNull(): String? {
+        return this
+            ?.replace("\r\n", "\n")
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+    }
+
+    private fun conciseConclusion(answer: String): String {
+        val normalized = answer.replace("\n", " ").replace(Regex("""\s+"""), " ").trim()
+        if (normalized.length <= 80) return normalized
+
+        val sentenceEnd = listOf("。", "！", "？", ".", "!", "?")
+            .mapNotNull { mark ->
+                normalized.indexOf(mark).takeIf { index -> index in 16..79 }?.let { it + mark.length }
+            }
+            .minOrNull()
+
+        return if (sentenceEnd != null) {
+            normalized.take(sentenceEnd)
+        } else {
+            normalized.take(80).trimEnd() + "..."
+        }
+    }
+
+    private fun friendlySourceTitle(raw: String): String? {
+        val fileName = raw.substringAfterLast('/').substringAfterLast('\\').trim()
+        val withoutExtension = fileName.replace(Regex("""\.(md|pdf|docx?|txt)$""", RegexOption.IGNORE_CASE), "")
+        val withoutDate = withoutExtension.replace(Regex("""^\d{4}[-_]\d{2}[-_]\d{2}[-_]?"""), "")
+        val readable = withoutDate
+            .replace('_', ' ')
+            .replace('-', ' ')
+            .replace(Regex("""\s+"""), " ")
+            .trim()
+
+        if (readable.isBlank()) return null
+        if (readable.contains("港澳") || readable.contains("通行证")) {
+            return "港澳通行证办理指南"
+        }
+        if (readable.length > 28 || readable.contains("Phase", ignoreCase = true)) {
+            return "知识库资料"
+        }
+        return readable
+    }
+
     private fun classifyError(exc: Exception): String {
         return when (exc) {
-            is SocketTimeoutException -> "查询时间有点久，请稍后再试一次。"
+            is SocketTimeoutException -> "查询失败，请稍后再试。"
             is HttpException -> when (exc.code()) {
-                504 -> "查询时间有点久，请稍后再试一次。"
-                502 -> "资料服务暂时繁忙，请稍后再试。"
-                in 500..599 -> "后端服务暂时不可用，请稍后再试。"
-                else -> "请求没有成功，请稍后再试。"
+                504 -> "查询失败，请稍后再试。"
+                502 -> "查询失败，请稍后再试。"
+                in 500..599 -> "查询失败，请稍后再试。"
+                else -> "查询失败，请稍后再试。"
             }
-            is IOException -> "网络好像不太稳定，请检查手机和电脑是否在同一网络。"
-            else -> "系统暂时没有响应，请稍后再试，或换个问题重新发送。"
+            is IOException -> "查询失败，请稍后再试。"
+            else -> "查询失败，请稍后再试。"
         }
     }
 

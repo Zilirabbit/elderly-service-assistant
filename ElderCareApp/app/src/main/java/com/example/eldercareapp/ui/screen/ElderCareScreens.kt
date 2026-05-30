@@ -104,6 +104,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.eldercareapp.api.ApiClient
 import com.example.eldercareapp.model.MaterialChecklist
+import com.example.eldercareapp.model.QaAnswerUiModel
+import com.example.eldercareapp.model.QaScenarioOption
 import com.example.eldercareapp.ui.component.ActionCard
 import com.example.eldercareapp.ui.component.BottomNavItemSpec
 import com.example.eldercareapp.ui.component.CardLayoutMode
@@ -164,6 +166,38 @@ private const val SpeechTargetAnswer = "answer"
 private const val SpeechTargetVoiceDraft = "voice_draft"
 private const val SpeechTargetGuide = "guide"
 private const val SpeechTargetGuidance = "guidance"
+
+private data class QaQuickQuestion(
+    val label: String,
+    val question: String,
+    val openGuidance: Boolean = false,
+)
+
+private val qaQuickQuestions = listOf(
+    QaQuickQuestion(
+        label = "首次办证",
+        question = "第一次办理港澳通行证需要怎么做？"
+    ),
+    QaQuickQuestion(
+        label = "签注续签",
+        question = "已有港澳通行证，签注过期或用完了怎么办？"
+    ),
+    QaQuickQuestion(
+        label = "过关材料",
+        question = "去香港澳门口岸过关需要准备什么材料？"
+    ),
+    QaQuickQuestion(
+        label = "我不确定",
+        question = "我不确定自己属于哪种港澳办理情况，应该怎么判断？",
+        openGuidance = true
+    )
+)
+
+private val qaEmptyExamples = listOf(
+    "第一次办港澳通行证要带什么？",
+    "签注过期了怎么办？",
+    "去香港过关要准备什么？"
+)
 
 private fun voiceLanguageCode(label: String): String {
     return when (label) {
@@ -850,6 +884,7 @@ fun ElderCareAppRoot(modifier: Modifier = Modifier) {
                             modifier = Modifier.padding(innerPadding),
                             chatViewModel = chatViewModel,
                             onOpenMaterialList = { openMaterialChecklist("hk_macau_pass_apply", null) },
+                            onOpenGuidance = { overlayScreen = OverlayScreen.Guidance },
                             onOpenFontSize = openFont
                         )
 
@@ -1131,6 +1166,7 @@ private fun HomeScreen(
 private fun ChatScreen(
     chatViewModel: ChatViewModel,
     onOpenMaterialList: () -> Unit,
+    onOpenGuidance: () -> Unit,
     onOpenFontSize: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -1233,10 +1269,23 @@ private fun ChatScreen(
             elevated = true,
             actions = listOf(
                 TopBarAction("历史", Icons.Filled.DateRange) {
-                    Toast.makeText(context, "历史记录暂未开放", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "查看问答历史", Toast.LENGTH_SHORT).show()
                 },
                 TopBarAction("字体", Icons.Filled.Settings, onClick = onOpenFontSize)
             )
+        )
+
+        QaQuickQuestionChips(
+            items = qaQuickQuestions,
+            onClick = { item ->
+                if (item.openGuidance) {
+                    onOpenGuidance()
+                } else {
+                    speech.stop()
+                    chatViewModel.submitPrefilledQuestion(item.question, inputType = "quick")
+                }
+            },
+            modifier = chatWidthModifier.align(Alignment.CenterHorizontally)
         )
 
         Column(
@@ -1244,37 +1293,33 @@ private fun ChatScreen(
                 .align(Alignment.CenterHorizontally)
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(responsive.pagePadding),
+                .padding(
+                    start = responsive.pagePadding,
+                    end = responsive.pagePadding,
+                    top = responsive.pagePadding,
+                    bottom = responsive.pagePadding + 112.dp
+                ),
             verticalArrangement = Arrangement.spacedBy(responsive.pageSpacing)
         ) {
-            if (uiState.answer.isBlank() && !uiState.isLoading && uiState.errorMessage.isNullOrBlank()) {
-                AssistantAnswerCard(
-                    title = "我帮您查到这些",
-                    body = "您可以询问港澳通行证续签材料、过关流程、口岸开放时间和交通路线。我会尽量用简单的话说明。",
-                    source = "资料来源：粤同心政策知识库",
-                    onOpenMaterialList = onOpenMaterialList,
-                    onReadAnswer = {
-                        speech.speak(
-                            "您可以询问港澳通行证续签材料、过关流程、口岸开放时间和交通路线。我会尽量用简单的话说明。",
-                            SpeechTargetAnswer,
-                            null,
-                            "zh-CN"
-                        )
+            if (uiState.answer.isBlank() && !uiState.isLoading && !uiState.isTranscribing && uiState.errorMessage.isNullOrBlank()) {
+                QaEmptyState(
+                    examples = qaEmptyExamples,
+                    onExampleClick = { question ->
+                        speech.stop()
+                        chatViewModel.submitPrefilledQuestion(question, inputType = "example")
                     },
-                    onStopReading = { speech.stop() },
-                    isPreparing = speech.isPreparingTarget(SpeechTargetAnswer),
-                    isSpeaking = speech.isSpeakingTarget(SpeechTargetAnswer)
+                    onGuidanceClick = onOpenGuidance
                 )
-            } else {
-                UserBubble(text = uiState.input.ifBlank { "港澳通行证续签需要什么材料？" })
+            } else if (uiState.lastQuestion.isNotBlank() || uiState.input.isNotBlank()) {
+                UserBubble(text = uiState.lastQuestion.ifBlank { uiState.input })
             }
 
             if (uiState.isLoading) {
-                LoadingCard()
+                QaLoadingCard()
             }
 
             if (uiState.isTranscribing) {
-                LoadingCard(text = "正在识别您的语音，请稍候...")
+                QaLoadingCard(text = "正在识别您的语音，请稍候...")
             }
 
             if (uiState.lastVoiceSampleName.isNotBlank()) {
@@ -1285,30 +1330,27 @@ private fun ChatScreen(
             }
 
             uiState.errorMessage?.takeIf { it.isNotBlank() }?.let { message ->
-                SoftCard(containerColor = Color.White, borderColor = Color(0xFFFFC9C2)) {
-                    Row(
-                        modifier = Modifier.padding(responsive.cardPadding),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)
-                    ) {
-                        IconBadge(icon = Icons.Filled.Warning, tint = ElderRed, background = Color(0xFFFFE8E5), size = responsive.iconMedium)
-                        Text(
-                            text = message,
-                            color = ElderRed,
-                            fontSize = responsive.body,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.weight(1f)
-                        )
+                QaErrorCard(
+                    message = message,
+                    onRetry = {
+                        val retryQuestion = uiState.input.ifBlank { uiState.lastQuestion }
+                        if (retryQuestion.isBlank()) {
+                            Toast.makeText(context, "请换个说法再问", Toast.LENGTH_SHORT).show()
+                        } else {
+                            chatViewModel.submitPrefilledQuestion(retryQuestion, inputType = "retry")
+                        }
                     }
-                }
+                )
             }
 
-            if (uiState.answer.isNotBlank()) {
-                val spokenText = uiState.ttsText.ifBlank { uiState.answer }
-                AssistantAnswerCard(
-                    title = "我帮您查到这些",
-                    body = uiState.answer,
-                    source = sourceText(uiState.sourceDocuments),
+            uiState.answerUiModel?.let { answer ->
+                val spokenText = uiState.ttsText.ifBlank { answer.readableText() }
+                AssistantStructuredAnswerCard(
+                    answer = answer,
+                    onScenarioClick = { option ->
+                        speech.stop()
+                        chatViewModel.submitPrefilledQuestion(option.standardQuestion, inputType = "scenario")
+                    },
                     onOpenMaterialList = onOpenMaterialList,
                     onReadAnswer = {
                         speech.speak(
@@ -1319,6 +1361,9 @@ private fun ChatScreen(
                         )
                     },
                     onStopReading = { speech.stop() },
+                    onContinueClick = {
+                        Toast.makeText(context, "可以继续输入您的问题", Toast.LENGTH_SHORT).show()
+                    },
                     isPreparing = speech.isPreparingTarget(SpeechTargetAnswer),
                     isSpeaking = speech.isSpeakingTarget(SpeechTargetAnswer)
                 )
@@ -2704,6 +2749,431 @@ private fun FaqSection(
             onClick = { isExpanded = !isExpanded },
             height = 52.dp
         )
+    }
+}
+
+@Composable
+private fun QaQuickQuestionChips(
+    items: List<QaQuickQuestion>,
+    onClick: (QaQuickQuestion) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val responsive = LocalElderResponsive.current
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(Color.White)
+            .border(1.dp, ElderLine)
+            .padding(horizontal = responsive.pagePadding, vertical = responsive.smallSpacing),
+        verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)
+    ) {
+        Text(
+            text = "常问事项：",
+            color = ElderText,
+            fontSize = responsive.label,
+            fontWeight = FontWeight.Bold
+        )
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(responsive.smallSpacing),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            items.forEach { item ->
+                QaChip(
+                    text = item.label,
+                    onClick = { onClick(item) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun QaChip(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val responsive = LocalElderResponsive.current
+    Box(
+        modifier = modifier
+            .heightIn(min = 48.dp)
+            .widthIn(min = 88.dp)
+            .background(ElderBlueSoft, RoundedCornerShape(24.dp))
+            .border(1.dp, Color(0xFFBFD8FF), RoundedCornerShape(24.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = responsive.cardSpacing, vertical = responsive.smallSpacing),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            color = ElderBlueDark,
+            fontSize = responsive.body,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun QaEmptyState(
+    examples: List<String>,
+    onExampleClick: (String) -> Unit,
+    onGuidanceClick: () -> Unit
+) {
+    val responsive = LocalElderResponsive.current
+    SoftCard(containerColor = Color.White, borderColor = Color(0xFFBFD8FF)) {
+        Column(
+            modifier = Modifier.padding(responsive.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(responsive.cardSpacing)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)
+            ) {
+                IconBadge(icon = Icons.Filled.Search, size = responsive.iconMedium)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "您好，我可以帮您查询港澳办事问题",
+                        color = ElderText,
+                        fontSize = responsive.cardTitle,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "您可以这样问：",
+                        color = ElderTextMuted,
+                        fontSize = responsive.body
+                    )
+                }
+            }
+
+            examples.forEach { question ->
+                SecondaryActionButton(
+                    text = question,
+                    icon = Icons.Filled.KeyboardArrowRight,
+                    onClick = { onExampleClick(question) },
+                    height = 52.dp
+                )
+            }
+
+            Text(
+                text = "不知道怎么问？",
+                color = ElderTextMuted,
+                fontSize = responsive.label,
+                fontWeight = FontWeight.Bold
+            )
+            PrimaryActionButton(
+                text = "我不确定，帮我判断",
+                icon = Icons.Filled.Search,
+                onClick = onGuidanceClick,
+                height = 56.dp
+            )
+        }
+    }
+}
+
+@Composable
+private fun AssistantStructuredAnswerCard(
+    answer: QaAnswerUiModel,
+    onScenarioClick: (QaScenarioOption) -> Unit,
+    onOpenMaterialList: () -> Unit,
+    onReadAnswer: () -> Unit,
+    onStopReading: () -> Unit,
+    onContinueClick: () -> Unit,
+    isPreparing: Boolean,
+    isSpeaking: Boolean
+) {
+    val responsive = LocalElderResponsive.current
+    val details = answer.originalAnswer.orEmpty()
+    SoftCard(containerColor = ElderBluePale, borderColor = Color(0xFFBFD8FF)) {
+        Column(
+            modifier = Modifier.padding(responsive.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(responsive.cardSpacing)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)
+            ) {
+                IconBadge(icon = Icons.Filled.AccountCircle, size = responsive.iconMedium)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = answer.title,
+                        color = ElderText,
+                        fontSize = responsive.cardTitle,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = answer.subtitle,
+                        color = ElderTextMuted,
+                        fontSize = responsive.label
+                    )
+                }
+            }
+
+            QaConclusionBox(answer.conclusion)
+            QaScenarioChips(answer.scenarioOptions, onScenarioClick)
+
+            if (answer.steps.isNotEmpty()) {
+                QaInfoSection(
+                    title = "怎么办",
+                    items = answer.steps,
+                    numbered = true
+                )
+            } else {
+                QaInfoSection(
+                    title = "详细说明",
+                    items = listOf(details.ifBlank { answer.conclusion }),
+                    numbered = false
+                )
+            }
+
+            QaMaterialSummarySection(
+                requiredMaterials = answer.requiredMaterials,
+                optionalMaterials = answer.optionalMaterials
+            )
+            QaInfoSection(
+                title = "注意事项",
+                items = answer.warnings,
+                numbered = false
+            )
+            QaSourceNotice(answer.sourceTitle ?: "知识库资料")
+            QaAnswerActions(
+                isPreparing = isPreparing,
+                isSpeaking = isSpeaking,
+                onOpenMaterialList = onOpenMaterialList,
+                onReadAnswer = onReadAnswer,
+                onStopReading = onStopReading,
+                onContinueClick = onContinueClick
+            )
+        }
+    }
+}
+
+@Composable
+private fun QaConclusionBox(conclusion: String) {
+    val responsive = LocalElderResponsive.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.White, RoundedCornerShape(16.dp))
+            .border(1.dp, Color(0xFFBFD8FF), RoundedCornerShape(16.dp))
+            .padding(responsive.cardSpacing),
+        verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)
+    ) {
+        Text(
+            text = "结论",
+            color = ElderBlueDark,
+            fontSize = responsive.label,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = conclusion,
+            color = ElderText,
+            fontSize = responsive.bodyLarge,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+@Composable
+private fun QaScenarioChips(
+    options: List<QaScenarioOption>,
+    onScenarioClick: (QaScenarioOption) -> Unit
+) {
+    val responsive = LocalElderResponsive.current
+    Column(verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)) {
+        Text(
+            text = "您是哪种情况？",
+            color = ElderText,
+            fontSize = responsive.label,
+            fontWeight = FontWeight.Bold
+        )
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(responsive.smallSpacing)
+        ) {
+            options.forEach { option ->
+                QaChip(
+                    text = option.label,
+                    onClick = { onScenarioClick(option) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun QaInfoSection(
+    title: String,
+    items: List<String>,
+    numbered: Boolean
+) {
+    val responsive = LocalElderResponsive.current
+    val visibleItems = items.filter { it.isNotBlank() }
+    if (visibleItems.isEmpty()) return
+
+    Column(verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)) {
+        Text(
+            text = title,
+            color = ElderText,
+            fontSize = responsive.bodyLarge,
+            fontWeight = FontWeight.Bold
+        )
+        visibleItems.forEachIndexed { index, item ->
+            Text(
+                text = if (numbered) "${index + 1}. $item" else "- $item",
+                color = Color(0xFF25334A),
+                fontSize = responsive.body
+            )
+        }
+    }
+}
+
+@Composable
+private fun QaMaterialSummarySection(
+    requiredMaterials: List<String>,
+    optionalMaterials: List<String>
+) {
+    val responsive = LocalElderResponsive.current
+    Column(verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)) {
+        Text(
+            text = "需要什么材料",
+            color = ElderText,
+            fontSize = responsive.bodyLarge,
+            fontWeight = FontWeight.Bold
+        )
+        if (requiredMaterials.isEmpty() && optionalMaterials.isEmpty()) {
+            Text(
+                text = "本次回答没有单独列出材料项，请打开材料清单或以窗口要求为准。",
+                color = ElderTextMuted,
+                fontSize = responsive.body
+            )
+        } else {
+            if (requiredMaterials.isNotEmpty()) {
+                Text("常见必备材料：", color = ElderTextMuted, fontSize = responsive.label, fontWeight = FontWeight.Bold)
+                requiredMaterials.forEach { item ->
+                    Text(text = "- $item", color = Color(0xFF25334A), fontSize = responsive.body)
+                }
+            }
+            if (optionalMaterials.isNotEmpty()) {
+                Text("可能还需要：", color = ElderTextMuted, fontSize = responsive.label, fontWeight = FontWeight.Bold)
+                optionalMaterials.forEach { item ->
+                    Text(text = "- $item", color = Color(0xFF25334A), fontSize = responsive.body)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QaSourceNotice(sourceTitle: String) {
+    val responsive = LocalElderResponsive.current
+    Text(
+        text = "资料来源：$sourceTitle",
+        color = ElderTextMuted,
+        fontSize = responsive.labelSmall
+    )
+}
+
+@Composable
+private fun QaAnswerActions(
+    isPreparing: Boolean,
+    isSpeaking: Boolean,
+    onOpenMaterialList: () -> Unit,
+    onReadAnswer: () -> Unit,
+    onStopReading: () -> Unit,
+    onContinueClick: () -> Unit
+) {
+    val isReadingActive = isPreparing || isSpeaking
+    PrimaryActionButton(
+        text = "查看材料清单",
+        icon = Icons.Filled.List,
+        onClick = onOpenMaterialList,
+        height = 56.dp
+    )
+    AdaptivePairRow(
+        first = { itemModifier ->
+            SecondaryActionButton(
+                text = when {
+                    isPreparing -> "准备朗读..."
+                    isSpeaking -> "停止朗读"
+                    else -> "朗读回答"
+                },
+                icon = if (isReadingActive) Icons.Filled.Stop else Icons.Filled.VolumeUp,
+                onClick = if (isReadingActive) onStopReading else onReadAnswer,
+                modifier = itemModifier,
+                height = 52.dp
+            )
+        },
+        second = { itemModifier ->
+            SecondaryActionButton(
+                text = "继续追问",
+                icon = Icons.Filled.Refresh,
+                onClick = onContinueClick,
+                modifier = itemModifier,
+                height = 52.dp
+            )
+        }
+    )
+}
+
+@Composable
+private fun QaLoadingCard(text: String = "正在查询相关办事资料...") {
+    LoadingCard(text = text)
+}
+
+@Composable
+private fun QaErrorCard(message: String, onRetry: () -> Unit) {
+    val responsive = LocalElderResponsive.current
+    val retryText = if (message.contains("知识库")) "换个说法再问" else "重新查询"
+    SoftCard(containerColor = Color.White, borderColor = Color(0xFFFFC9C2)) {
+        Column(
+            modifier = Modifier.padding(responsive.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(responsive.cardSpacing)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)
+            ) {
+                IconBadge(icon = Icons.Filled.Warning, tint = ElderRed, background = Color(0xFFFFE8E5), size = responsive.iconMedium)
+                Text(
+                    text = message,
+                    color = ElderRed,
+                    fontSize = responsive.body,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            SecondaryActionButton(
+                text = retryText,
+                icon = Icons.Filled.Refresh,
+                onClick = onRetry,
+                height = 52.dp
+            )
+        }
+    }
+}
+
+private fun QaAnswerUiModel.readableText(): String {
+    return buildString {
+        append("结论。")
+        append(conclusion)
+        if (steps.isNotEmpty()) {
+            append(" 怎么办。")
+            append(steps.joinToString("。"))
+        } else if (!originalAnswer.isNullOrBlank()) {
+            append(" 详细说明。")
+            append(originalAnswer.orEmpty())
+        }
+        if (requiredMaterials.isNotEmpty() || optionalMaterials.isNotEmpty()) {
+            append(" 需要什么材料。")
+            append((requiredMaterials + optionalMaterials).joinToString("。"))
+        }
+        if (warnings.isNotEmpty()) {
+            append(" 注意事项。")
+            append(warnings.joinToString("。"))
+        }
     }
 }
 
