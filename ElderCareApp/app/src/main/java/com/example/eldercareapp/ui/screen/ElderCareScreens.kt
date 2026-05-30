@@ -104,6 +104,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.eldercareapp.api.ApiClient
 import com.example.eldercareapp.model.MaterialChecklist
+import com.example.eldercareapp.viewmodel.ChatMessageRole
 import com.example.eldercareapp.model.QaAnswerUiModel
 import com.example.eldercareapp.model.QaScenarioOption
 import com.example.eldercareapp.ui.component.ActionCard
@@ -143,6 +144,7 @@ import com.example.eldercareapp.viewmodel.SavedMaterialChecklist
 import com.example.eldercareapp.voice.VoiceRecorder
 import java.io.File
 import java.util.Locale
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private enum class MainTab {
@@ -166,6 +168,7 @@ private const val SpeechTargetAnswer = "answer"
 private const val SpeechTargetVoiceDraft = "voice_draft"
 private const val SpeechTargetGuide = "guide"
 private const val SpeechTargetGuidance = "guidance"
+private const val MAX_RECORD_SECONDS = 30
 
 private data class QaQuickQuestion(
     val label: String,
@@ -1177,12 +1180,41 @@ private fun ChatScreen(
     var showVoicePanel by remember { mutableStateOf(false) }
     var selectedVoiceLanguage by remember { mutableStateOf("普通话") }
     var isRecording by remember { mutableStateOf(false) }
+    var voicePanelMessage by remember { mutableStateOf<String?>(null) }
+    val chatScrollState = rememberScrollState()
     val speech = rememberCloudSpeechController(chatViewModel)
 
     DisposableEffect(Unit) {
         onDispose {
             voiceRecorder.cancel()
         }
+    }
+
+    LaunchedEffect(isRecording) {
+        if (isRecording) {
+            delay(MAX_RECORD_SECONDS * 1000L)
+            if (isRecording) {
+                voicePanelMessage = "录音已自动结束，正在识别..."
+                val file = voiceRecorder.stop()
+                isRecording = false
+                showVoicePanel = false
+                if (file == null) {
+                    Toast.makeText(context, "录音时间太短，请重新说一遍", Toast.LENGTH_SHORT).show()
+                } else {
+                    chatViewModel.transcribeVoice(file, voiceLanguageCode(selectedVoiceLanguage), "现场录音")
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(
+        uiState.messages.size,
+        uiState.isLoading,
+        uiState.isTranscribing,
+        uiState.voiceDraft,
+        uiState.errorMessage
+    ) {
+        chatScrollState.animateScrollTo(chatScrollState.maxValue)
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -1205,6 +1237,7 @@ private fun ChatScreen(
             return@rememberLauncherForActivityResult
         }
 
+        voicePanelMessage = null
         showVoicePanel = false
         chatViewModel.transcribeVoice(
             file = sampleFile,
@@ -1219,6 +1252,7 @@ private fun ChatScreen(
             Manifest.permission.RECORD_AUDIO
         ) == PackageManager.PERMISSION_GRANTED
         if (granted) {
+            voicePanelMessage = null
             showVoicePanel = true
         } else {
             permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
@@ -1226,8 +1260,10 @@ private fun ChatScreen(
     }
 
     fun startRecording() {
+        if (isRecording || uiState.isTranscribing) return
         try {
             voiceRecorder.start(context)
+            voicePanelMessage = null
             isRecording = true
         } catch (exc: Exception) {
             isRecording = false
@@ -1236,6 +1272,7 @@ private fun ChatScreen(
     }
 
     fun stopRecordingAndUpload() {
+        if (!isRecording) return
         val file = voiceRecorder.stop()
         isRecording = false
         showVoicePanel = false
@@ -1249,6 +1286,7 @@ private fun ChatScreen(
     fun stopRecording() {
         voiceRecorder.cancel()
         isRecording = false
+        voicePanelMessage = null
         showVoicePanel = false
     }
     val chatWidthModifier = if (responsive.windowSizeClass == ElderWindowSizeClass.Compact) {
@@ -1292,7 +1330,7 @@ private fun ChatScreen(
             modifier = chatWidthModifier
                 .align(Alignment.CenterHorizontally)
                 .weight(1f)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(chatScrollState)
                 .padding(
                     start = responsive.pagePadding,
                     end = responsive.pagePadding,
@@ -1301,7 +1339,7 @@ private fun ChatScreen(
                 ),
             verticalArrangement = Arrangement.spacedBy(responsive.pageSpacing)
         ) {
-            if (uiState.answer.isBlank() && !uiState.isLoading && !uiState.isTranscribing && uiState.errorMessage.isNullOrBlank()) {
+            if (uiState.messages.isEmpty() && !uiState.isLoading && !uiState.isTranscribing && uiState.errorMessage.isNullOrBlank()) {
                 QaEmptyState(
                     examples = qaEmptyExamples,
                     onExampleClick = { question ->
@@ -1310,8 +1348,54 @@ private fun ChatScreen(
                     },
                     onGuidanceClick = onOpenGuidance
                 )
-            } else if (uiState.lastQuestion.isNotBlank() || uiState.input.isNotBlank()) {
-                UserBubble(text = uiState.lastQuestion.ifBlank { uiState.input })
+            }
+
+            uiState.messages.forEach { message ->
+                when (message.role) {
+                    ChatMessageRole.User -> UserBubble(text = message.text)
+                    ChatMessageRole.Assistant -> {
+                        val answer = message.answerUiModel
+                        if (answer != null) {
+                            val target = "$SpeechTargetAnswer-${message.id}"
+                            val spokenText = message.ttsText.ifBlank { answer.readableText() }
+                            AssistantStructuredAnswerCard(
+                                answer = answer,
+                                onScenarioClick = { option ->
+                                    speech.stop()
+                                    chatViewModel.submitPrefilledQuestion(option.standardQuestion, inputType = "scenario")
+                                },
+                                onOpenMaterialList = onOpenMaterialList,
+                                onReadAnswer = {
+                                    speech.speak(
+                                        spokenText,
+                                        target,
+                                        message.ttsAudioUrl,
+                                        "zh-CN"
+                                    )
+                                },
+                                onStopReading = { speech.stop() },
+                                onContinueClick = {
+                                    Toast.makeText(context, "可以继续输入您的问题", Toast.LENGTH_SHORT).show()
+                                },
+                                isPreparing = speech.isPreparingTarget(target),
+                                isSpeaking = speech.isSpeakingTarget(target)
+                            )
+                        } else if (message.text.isNotBlank()) {
+                            AssistantAnswerCard(
+                                title = "我帮您查到这些",
+                                body = message.text,
+                                source = "知识库资料",
+                                onOpenMaterialList = onOpenMaterialList,
+                                onReadAnswer = {
+                                    speech.speak(message.text, "$SpeechTargetAnswer-${message.id}", null, "zh-CN")
+                                },
+                                onStopReading = { speech.stop() },
+                                isPreparing = speech.isPreparingTarget("$SpeechTargetAnswer-${message.id}"),
+                                isSpeaking = speech.isSpeakingTarget("$SpeechTargetAnswer-${message.id}")
+                            )
+                        }
+                    }
+                }
             }
 
             if (uiState.isLoading) {
@@ -1319,7 +1403,7 @@ private fun ChatScreen(
             }
 
             if (uiState.isTranscribing) {
-                QaLoadingCard(text = "正在识别您的语音，请稍候...")
+                QaLoadingCard(text = voicePanelMessage ?: "正在识别您的语音，请稍候...")
             }
 
             if (uiState.lastVoiceSampleName.isNotBlank()) {
@@ -1330,48 +1414,37 @@ private fun ChatScreen(
             }
 
             uiState.errorMessage?.takeIf { it.isNotBlank() }?.let { message ->
-                QaErrorCard(
-                    message = message,
-                    onRetry = {
-                        val retryQuestion = uiState.input.ifBlank { uiState.lastQuestion }
-                        if (retryQuestion.isBlank()) {
-                            Toast.makeText(context, "请换个说法再问", Toast.LENGTH_SHORT).show()
-                        } else {
-                            chatViewModel.submitPrefilledQuestion(retryQuestion, inputType = "retry")
+                if (message.contains("没有听清")) {
+                    VoiceErrorCard(
+                        message = "没有听清，请重新说一遍，或改用文字输入。",
+                        onRetry = {
+                            chatViewModel.clearVoiceDraft()
+                            showVoicePanel = true
+                        },
+                        onManualInput = {
+                            chatViewModel.clearVoiceErrorForManualInput()
                         }
-                    }
-                )
-            }
-
-            uiState.answerUiModel?.let { answer ->
-                val spokenText = uiState.ttsText.ifBlank { answer.readableText() }
-                AssistantStructuredAnswerCard(
-                    answer = answer,
-                    onScenarioClick = { option ->
-                        speech.stop()
-                        chatViewModel.submitPrefilledQuestion(option.standardQuestion, inputType = "scenario")
-                    },
-                    onOpenMaterialList = onOpenMaterialList,
-                    onReadAnswer = {
-                        speech.speak(
-                            spokenText,
-                            SpeechTargetAnswer,
-                            uiState.ttsAudioUrl,
-                            "zh-CN"
-                        )
-                    },
-                    onStopReading = { speech.stop() },
-                    onContinueClick = {
-                        Toast.makeText(context, "可以继续输入您的问题", Toast.LENGTH_SHORT).show()
-                    },
-                    isPreparing = speech.isPreparingTarget(SpeechTargetAnswer),
-                    isSpeaking = speech.isSpeakingTarget(SpeechTargetAnswer)
-                )
+                    )
+                } else {
+                    QaErrorCard(
+                        message = message,
+                        onRetry = {
+                            val retryQuestion = uiState.input.ifBlank { uiState.lastQuestion }
+                            if (retryQuestion.isBlank()) {
+                                Toast.makeText(context, "请换个说法再问", Toast.LENGTH_SHORT).show()
+                            } else {
+                                chatViewModel.submitPrefilledQuestion(retryQuestion, inputType = "retry")
+                            }
+                        }
+                    )
+                }
             }
 
             uiState.voiceDraft?.let { draft ->
+                val isSampleDraft = uiState.lastVoiceSampleName.isNotBlank() && uiState.lastVoiceSampleName != "现场录音"
                 VoiceConfirmCard(
                     draft = draft,
+                    retryText = if (isSampleDraft) "重新选择" else "重新说一遍",
                     onReadDraft = {
                         speech.speak(
                             draft,
@@ -1390,7 +1463,11 @@ private fun ChatScreen(
                     onRetry = {
                         speech.stop()
                         chatViewModel.clearVoiceDraft()
-                        showVoicePanel = true
+                        if (isSampleDraft) {
+                            audioSampleLauncher.launch("audio/*")
+                        } else {
+                            showVoicePanel = true
+                        }
                     },
                     onEdit = {
                         speech.stop()
@@ -1413,6 +1490,7 @@ private fun ChatScreen(
                     onLanguageSelected = { selectedVoiceLanguage = it },
                     isRecording = isRecording,
                     enabled = !uiState.isLoading && !uiState.isTranscribing,
+                    statusMessage = voicePanelMessage,
                     onStartRecording = { startRecording() },
                     onPickSample = { audioSampleLauncher.launch("audio/*") },
                     onStopRecording = { stopRecordingAndUpload() },
@@ -2937,6 +3015,9 @@ private fun AssistantStructuredAnswerCard(
                 items = answer.warnings,
                 numbered = false
             )
+            if (details.isNotBlank() && details != answer.conclusion) {
+                QaDetailSection(details)
+            }
             QaSourceNotice(answer.sourceTitle ?: "知识库资料")
             QaAnswerActions(
                 isPreparing = isPreparing,
@@ -2971,7 +3052,9 @@ private fun QaConclusionBox(conclusion: String) {
             text = conclusion,
             color = ElderText,
             fontSize = responsive.bodyLarge,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
@@ -3045,13 +3128,13 @@ private fun QaMaterialSummarySection(
         )
         if (requiredMaterials.isEmpty() && optionalMaterials.isEmpty()) {
             Text(
-                text = "本次回答没有单独列出材料项，请打开材料清单或以窗口要求为准。",
+                text = "本次回答没有明确列出材料项，请打开材料清单或以窗口要求为准。",
                 color = ElderTextMuted,
                 fontSize = responsive.body
             )
         } else {
             if (requiredMaterials.isNotEmpty()) {
-                Text("常见必备材料：", color = ElderTextMuted, fontSize = responsive.label, fontWeight = FontWeight.Bold)
+                Text("必备材料：", color = ElderTextMuted, fontSize = responsive.label, fontWeight = FontWeight.Bold)
                 requiredMaterials.forEach { item ->
                     Text(text = "- $item", color = Color(0xFF25334A), fontSize = responsive.body)
                 }
@@ -3067,10 +3150,41 @@ private fun QaMaterialSummarySection(
 }
 
 @Composable
+private fun QaDetailSection(detailText: String) {
+    val responsive = LocalElderResponsive.current
+    var expanded by remember(detailText) { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)) {
+        Text(
+            text = "详细说明",
+            color = ElderText,
+            fontSize = responsive.bodyLarge,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = detailText,
+            color = Color(0xFF25334A),
+            fontSize = responsive.body,
+            maxLines = if (expanded) Int.MAX_VALUE else 6,
+            overflow = TextOverflow.Ellipsis
+        )
+        if (detailText.length > 90) {
+            Text(
+                text = if (expanded) "收起说明" else "展开完整说明",
+                color = ElderBlue,
+                fontSize = responsive.label,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.clickable { expanded = !expanded }
+            )
+        }
+    }
+}
+
+@Composable
 private fun QaSourceNotice(sourceTitle: String) {
     val responsive = LocalElderResponsive.current
+    val notice = if (sourceTitle.startsWith("资料")) sourceTitle else "资料来源：$sourceTitle"
     Text(
-        text = "资料来源：$sourceTitle",
+        text = notice,
         color = ElderTextMuted,
         fontSize = responsive.labelSmall
     )
@@ -3162,7 +3276,8 @@ private fun QaAnswerUiModel.readableText(): String {
         if (steps.isNotEmpty()) {
             append(" 怎么办。")
             append(steps.joinToString("。"))
-        } else if (!originalAnswer.isNullOrBlank()) {
+        }
+        if (!originalAnswer.isNullOrBlank()) {
             append(" 详细说明。")
             append(originalAnswer.orEmpty())
         }
@@ -3367,6 +3482,7 @@ private fun getDisplayNameForUri(context: Context, uri: Uri): String {
 @Composable
 private fun VoiceConfirmCard(
     draft: String,
+    retryText: String,
     onReadDraft: () -> Unit,
     onStopReading: () -> Unit,
     isPreparing: Boolean,
@@ -3429,10 +3545,10 @@ private fun VoiceConfirmCard(
                 )
                 AdaptivePairRow(
                     first = { itemModifier ->
-                        SecondaryActionButton("重说", Icons.Filled.Refresh, onRetry, modifier = itemModifier, height = 52.dp)
+                        SecondaryActionButton(retryText, Icons.Filled.Refresh, onRetry, modifier = itemModifier, height = 52.dp)
                     },
                     second = { itemModifier ->
-                        SecondaryActionButton("修改", Icons.Filled.Edit, onEdit, modifier = itemModifier, height = 52.dp)
+                        SecondaryActionButton("手动修改", Icons.Filled.Edit, onEdit, modifier = itemModifier, height = 52.dp)
                     }
                 )
             } else {
@@ -3448,11 +3564,60 @@ private fun VoiceConfirmCard(
                         modifier = Modifier.weight(1f),
                         height = 52.dp
                     )
-                    SecondaryActionButton("重说", Icons.Filled.Refresh, onRetry, modifier = Modifier.weight(1f), height = 52.dp)
-                    SecondaryActionButton("修改", Icons.Filled.Edit, onEdit, modifier = Modifier.weight(1f), height = 52.dp)
+                    SecondaryActionButton(retryText, Icons.Filled.Refresh, onRetry, modifier = Modifier.weight(1f), height = 52.dp)
+                    SecondaryActionButton("手动修改", Icons.Filled.Edit, onEdit, modifier = Modifier.weight(1f), height = 52.dp)
                 }
             }
-            PrimaryActionButton("确认发送", Icons.Filled.Check, onConfirm, height = 54.dp)
+            PrimaryActionButton("发送查询", Icons.Filled.Check, onConfirm, height = 54.dp)
+        }
+    }
+}
+
+@Composable
+private fun VoiceErrorCard(
+    message: String,
+    onRetry: () -> Unit,
+    onManualInput: () -> Unit
+) {
+    val responsive = LocalElderResponsive.current
+    SoftCard(containerColor = Color.White, borderColor = Color(0xFFFFC9C2)) {
+        Column(
+            modifier = Modifier.padding(responsive.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(responsive.cardSpacing)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)
+            ) {
+                IconBadge(icon = Icons.Filled.Mic, tint = ElderRed, background = Color(0xFFFFE8E5), size = responsive.iconMedium)
+                Text(
+                    text = message,
+                    color = ElderText,
+                    fontSize = responsive.body,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            AdaptivePairRow(
+                first = { itemModifier ->
+                    SecondaryActionButton(
+                        text = "重新说一遍",
+                        icon = Icons.Filled.Refresh,
+                        onClick = onRetry,
+                        modifier = itemModifier,
+                        height = 52.dp
+                    )
+                },
+                second = { itemModifier ->
+                    SecondaryActionButton(
+                        text = "手动输入",
+                        icon = Icons.Filled.Edit,
+                        onClick = onManualInput,
+                        modifier = itemModifier,
+                        height = 52.dp
+                    )
+                }
+            )
         }
     }
 }
@@ -3463,6 +3628,7 @@ private fun VoiceInputPanel(
     onLanguageSelected: (String) -> Unit,
     isRecording: Boolean,
     enabled: Boolean,
+    statusMessage: String?,
     onStartRecording: () -> Unit,
     onPickSample: () -> Unit,
     onStopRecording: () -> Unit,
@@ -3515,11 +3681,20 @@ private fun VoiceInputPanel(
                 onSelected = onLanguageSelected
             )
 
+            if (!statusMessage.isNullOrBlank()) {
+                Text(
+                    text = statusMessage,
+                    color = ElderGreen,
+                    fontSize = responsive.label,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
             PrimaryActionButton(
                 text = if (isRecording) "停止并识别" else "开始说话",
                 icon = if (isRecording) Icons.Filled.Stop else Icons.Filled.Mic,
                 onClick = if (isRecording) onStopRecording else onStartRecording,
-                enabled = enabled,
+                enabled = enabled && !statusMessage.orEmpty().contains("正在识别"),
                 height = 58.dp,
                 color = if (isRecording) ElderGreen else ElderBlue
             )
@@ -3573,22 +3748,23 @@ private fun ChatInputBar(
         Box(
             modifier = Modifier
                 .weight(1f)
-                .heightIn(min = responsive.inputMinHeight)
+                .heightIn(min = responsive.inputMinHeight, max = responsive.inputMinHeight * 2)
                 .background(Color(0xFFF7FAFE), RoundedCornerShape(28.dp))
                 .border(1.dp, ElderLine, RoundedCornerShape(28.dp))
-                .padding(horizontal = responsive.cardSpacing),
+                .padding(horizontal = responsive.cardSpacing, vertical = responsive.smallSpacing),
             contentAlignment = Alignment.CenterStart
         ) {
             BasicTextField(
                 value = value,
                 onValueChange = onValueChange,
                 enabled = enabled,
-                singleLine = true,
+                singleLine = false,
+                maxLines = 2,
                 textStyle = TextStyle(color = ElderText, fontSize = responsive.body),
                 modifier = Modifier.fillMaxWidth(),
                 decorationBox = { innerTextField ->
                     if (value.isBlank()) {
-                        Text("请输入您的问题", color = Color(0xFFA0AABA), fontSize = responsive.body)
+                        Text("输入或语音提问", color = Color(0xFFA0AABA), fontSize = responsive.body)
                     }
                     innerTextField()
                 }

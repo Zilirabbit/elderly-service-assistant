@@ -151,6 +151,34 @@ class FakeDifyService:
         }
 
 
+class FakeStructuredDifyService:
+    async def send_chat_message(self, message: str, conversation_id: str, user_id: str):
+        return {
+            "answer": """
+            {
+              "title": "首次办理港澳通行证",
+              "summary": "一般可以办理，请按当地要求准备材料。",
+              "scenario_options": ["首次办理", "不确定"],
+              "steps": ["准备身份证", "前往窗口办理"],
+              "materials": {
+                "required": ["居民身份证"],
+                "optional": []
+              },
+              "warnings": ["以当地出入境管理部门最新要求为准"],
+              "detail_text": "建议先确认户籍地或居住地办理要求，再准备材料前往办理。",
+              "source_note": "资料依据：知识库中的相关官方指南/政策说明",
+              "confidence": "medium",
+              "need_human_reminder": true
+            }
+            """,
+            "conversation_id": "conversation-structured",
+            "metadata": {
+                "usage": {"tokens": 3},
+                "retriever_resources": [],
+            },
+        }
+
+
 class FakeTtsService:
     async def synthesize(self, text: str, language: str = "zh-CN", voice: str | None = None):
         return SimpleNamespace(
@@ -180,6 +208,20 @@ class ChatPolicyTtsTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.tts.text, "适合朗读的文本")
         self.assertEqual(response.tts.audio_url, "/static/tts/audio.mp3")
         self.assertFalse(response.tts.cached)
+
+    async def test_chat_policy_includes_structured_answer_when_dify_returns_json(self) -> None:
+        with (
+            patch.object(chat_routes, "qwen_text_service", FakeQwenService()),
+            patch.object(chat_routes, "dify_service", FakeStructuredDifyService()),
+            patch.object(chat_routes, "tts_service", FakeTtsService()),
+        ):
+            response = await chat_routes.chat_policy(ChatPolicyRequest(message="我想办证"))
+
+        self.assertIn("summary", response.answer)
+        self.assertEqual(response.display_text, "建议先确认户籍地或居住地办理要求，再准备材料前往办理。")
+        self.assertEqual(response.structured_answer.summary, "一般可以办理，请按当地要求准备材料。")
+        self.assertEqual(response.structured_answer.materials.required, ["居民身份证"])
+        self.assertEqual(response.conversation_id, "conversation-structured")
 
     async def test_chat_policy_keeps_answer_when_tts_synthesis_fails(self) -> None:
         with (

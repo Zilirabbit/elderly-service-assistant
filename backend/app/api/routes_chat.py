@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.config import settings
 from app.schemas.chat_schema import ChatPolicyRequest, ChatPolicyResponse, SourceItem, TtsInfo
-from app.services.dify_service import dify_service
+from app.services.dify_service import dify_service, parse_structured_answer
 from app.services.qwen_text_service import qwen_text_service
 from app.services.tts_service import TtsSynthesisError, tts_service
 
@@ -104,7 +104,9 @@ async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
         )
         raise HTTPException(status_code=500, detail="后端服务暂时不可用") from exc
 
-    display_text = dify_result.get("answer") or ""
+    raw_answer = dify_result.get("answer") or ""
+    structured_answer = parse_structured_answer(raw_answer)
+    display_text = structured_answer.detail_text or structured_answer.summary or raw_answer
     conversation_id = dify_result.get("conversation_id") or ""
     metadata = dify_result.get("metadata") or {}
     retriever_resources = metadata.get("retriever_resources") or []
@@ -116,8 +118,10 @@ async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
     sources = [
         SourceItem(
             document_name=item.get("document_name"),
+            title=item.get("title"),
             score=item.get("score"),
             content=item.get("content"),
+            source_type=item.get("source_type") or "knowledge_base",
         )
         for item in retriever_resources
     ]
@@ -165,16 +169,17 @@ async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
         user_id,
         message_length,
         len(search_query),
-        len(display_text),
+        len(raw_answer),
         len(sources),
     )
 
     return ChatPolicyResponse(
-        answer=display_text,
+        answer=raw_answer,
         conversation_id=conversation_id,
         original_text=original_text,
         search_query=search_query,
         display_text=display_text,
+        structured_answer=structured_answer,
         tts=TtsInfo(
             language=tts_language,
             voice=tts_voice,

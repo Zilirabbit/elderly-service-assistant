@@ -6,7 +6,9 @@ import com.example.eldercareapp.api.ApiClient
 import com.example.eldercareapp.model.ChatPolicyRequest
 import com.example.eldercareapp.model.ChatPolicyResponse
 import com.example.eldercareapp.model.QaAnswerUiModel
+import com.example.eldercareapp.model.QaScenarioOption
 import com.example.eldercareapp.model.TtsSynthesizeRequest
+import com.example.eldercareapp.model.defaultQaScenarioOptions
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,10 +23,25 @@ import java.io.File
 import java.io.IOException
 import java.net.SocketTimeoutException
 
+enum class ChatMessageRole {
+    User,
+    Assistant
+}
+
+data class ChatMessageUi(
+    val id: Long,
+    val role: ChatMessageRole,
+    val text: String = "",
+    val answerUiModel: QaAnswerUiModel? = null,
+    val ttsText: String = "",
+    val ttsAudioUrl: String? = null,
+)
+
 data class ChatUiState(
     val input: String = "",
     val answer: String = "",
     val answerUiModel: QaAnswerUiModel? = null,
+    val messages: List<ChatMessageUi> = emptyList(),
     val conversationId: String = "",
     val lastQuestion: String = "",
     val sourceDocuments: List<String> = emptyList(),
@@ -41,6 +58,7 @@ data class ChatUiState(
 class ChatViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
+    private var nextMessageId = 1L
 
     fun updateInput(value: String) {
         _uiState.value = _uiState.value.copy(input = value, errorMessage = null)
@@ -57,26 +75,37 @@ class ChatViewModel : ViewModel() {
             return
         }
 
-        _uiState.value = _uiState.value.copy(
-            input = cleanedQuestion,
-            voiceDraft = null,
-            errorMessage = null,
-        )
-        sendQuestion(inputType = inputType, ttsLanguage = ttsLanguage)
+        sendQuestion(questionOverride = cleanedQuestion, inputType = inputType, ttsLanguage = ttsLanguage)
     }
 
-    fun sendQuestion(inputType: String = "text", ttsLanguage: String = "zh-CN") {
-        val question = _uiState.value.input.trim()
+    fun sendQuestion(
+        inputType: String = "text",
+        ttsLanguage: String = "zh-CN",
+        questionOverride: String? = null
+    ) {
+        val question = questionOverride?.trim() ?: _uiState.value.input.trim()
         if (question.isEmpty()) {
             _uiState.value = _uiState.value.copy(errorMessage = "请先输入您想咨询的问题")
             return
         }
 
+        val userMessage = ChatMessageUi(
+            id = nextMessageId(),
+            role = ChatMessageRole.User,
+            text = question
+        )
+        val messagesWithUser = _uiState.value.messages + userMessage
+
         _uiState.value = _uiState.value.copy(
+            input = "",
             answer = "",
             answerUiModel = null,
+            messages = messagesWithUser,
             lastQuestion = question,
             sourceDocuments = emptyList(),
+            voiceDraft = null,
+            lastVoiceSampleName = "",
+            lastVoiceSampleSizeBytes = 0L,
             ttsText = "",
             ttsAudioUrl = null,
             isLoading = true,
@@ -100,7 +129,7 @@ class ChatViewModel : ViewModel() {
 
                 if (cleanedAnswer.isBlank()) {
                     _uiState.value = current.copy(
-                        input = question,
+                        input = "",
                         answer = "",
                         answerUiModel = null,
                         lastQuestion = question,
@@ -122,9 +151,17 @@ class ChatViewModel : ViewModel() {
                     .distinct()
 
                 _uiState.value = current.copy(
-                    input = question,
+                    input = "",
                     answer = cleanedAnswer,
                     answerUiModel = response.toQaAnswerUiModel(cleanedAnswer, sourceDocuments),
+                    messages = current.messages + ChatMessageUi(
+                        id = nextMessageId(),
+                        role = ChatMessageRole.Assistant,
+                        text = cleanedAnswer,
+                        answerUiModel = response.toQaAnswerUiModel(cleanedAnswer, sourceDocuments),
+                        ttsText = cleanMarkdownAnswer(response.tts?.text?.takeIf { it.isNotBlank() } ?: cleanedAnswer),
+                        ttsAudioUrl = response.tts?.audio_url
+                    ),
                     conversationId = response.conversation_id.orEmpty(),
                     lastQuestion = question,
                     sourceDocuments = sourceDocuments,
@@ -196,14 +233,12 @@ class ChatViewModel : ViewModel() {
 
     fun confirmVoiceDraft(ttsLanguage: String = "zh-CN") {
         val draft = _uiState.value.voiceDraft?.trim().orEmpty()
-        if (draft.isBlank()) return
+        if (draft.isBlank()) {
+            _uiState.value = _uiState.value.copy(errorMessage = "没有听清，请重新说一遍，或改用文字输入。")
+            return
+        }
 
-        _uiState.value = _uiState.value.copy(
-            input = draft,
-            voiceDraft = null,
-            errorMessage = null,
-        )
-        sendQuestion(inputType = "voice", ttsLanguage = ttsLanguage)
+        sendQuestion(inputType = "voice", ttsLanguage = ttsLanguage, questionOverride = draft)
     }
 
     fun clearVoiceDraft() {
@@ -217,6 +252,10 @@ class ChatViewModel : ViewModel() {
             voiceDraft = null,
             errorMessage = null,
         )
+    }
+
+    fun clearVoiceErrorForManualInput() {
+        _uiState.value = _uiState.value.copy(errorMessage = null, voiceDraft = null)
     }
 
     suspend fun synthesizeSpeech(text: String, language: String = "zh-CN"): String? {
@@ -233,39 +272,81 @@ class ChatViewModel : ViewModel() {
         cleanedAnswer: String,
         sourceDocuments: List<String>
     ): QaAnswerUiModel {
+        val structured = structured_answer
         val structuredConclusion = listOfNotNull(
+            structured?.summary.cleanTextOrNull(),
             conclusion.cleanTextOrNull(),
             summary.cleanTextOrNull()
         ).firstOrNull()
-        val stepsFromResponse = steps.cleanedItems()
-        val requiredFromResponse = (materials?.required.orEmpty() + required_materials).cleanedItems()
-        val optionalFromResponse = (
-            materials?.possible_extra.orEmpty() +
-                materials?.optional.orEmpty() +
-                optional_materials
-            ).cleanedItems()
-        val warningsFromResponse = warnings.cleanedItems().ifEmpty {
+        val stepsFromResponse = structured?.steps.orEmpty().cleanedItems().ifEmpty {
+            steps.cleanedItems()
+        }
+        val requiredFromResponse = structured?.materials?.required.orEmpty().cleanedItems().ifEmpty {
+            (materials?.required.orEmpty() + required_materials).cleanedItems()
+        }
+        val optionalFromResponse = structured?.materials?.optional.orEmpty().cleanedItems().ifEmpty {
+            (
+                materials?.possible_extra.orEmpty() +
+                    materials?.optional.orEmpty() +
+                    optional_materials
+                ).cleanedItems()
+        }
+        val warningsFromResponse = structured?.warnings.orEmpty().cleanedItems().ifEmpty {
+            warnings.cleanedItems()
+        }.ifEmpty {
             listOf("具体要求以当地出入境管理部门或现场窗口为准。")
         }
-        val sourceTitle = source_title.cleanTextOrNull()
+        val sourceTitle = structured?.source_note.cleanTextOrNull()
+            ?: source_title.cleanTextOrNull()
             ?: sourceDocuments.mapNotNull { friendlySourceTitle(it) }.firstOrNull()
             ?: "知识库资料"
+        val scenarioOptions = structured?.scenario_options.orEmpty()
+            .cleanedItems()
+            .toQaScenarioOptions()
+            .ifEmpty { defaultQaScenarioOptions() }
+        val details = structured?.detail_text.cleanTextOrNull() ?: cleanedAnswer
 
         return QaAnswerUiModel(
+            subtitle = structured?.title.cleanTextOrNull()
+                ?: "根据办事资料整理，办理前请以当地窗口要求为准",
             conclusion = structuredConclusion ?: conciseConclusion(cleanedAnswer),
+            scenarioOptions = scenarioOptions,
             steps = stepsFromResponse,
             requiredMaterials = requiredFromResponse,
             optionalMaterials = optionalFromResponse,
             warnings = warningsFromResponse,
             sourceTitle = sourceTitle,
-            originalAnswer = cleanedAnswer,
-            confidence = confidence.cleanTextOrNull(),
-            needHumanReminder = true
+            originalAnswer = details,
+            confidence = structured?.confidence.cleanTextOrNull() ?: confidence.cleanTextOrNull(),
+            needHumanReminder = structured?.need_human_reminder ?: true
         )
     }
 
     private fun List<String>.cleanedItems(): List<String> {
         return mapNotNull { it.cleanTextOrNull() }.distinct()
+    }
+
+    private fun nextMessageId(): Long = nextMessageId++
+
+    private fun List<String>.toQaScenarioOptions(): List<QaScenarioOption> {
+        return map { label ->
+            QaScenarioOption(
+                label = label,
+                standardQuestion = scenarioQuestionFor(label)
+            )
+        }
+    }
+
+    private fun scenarioQuestionFor(label: String): String {
+        return when {
+            label.contains("首次") || label.contains("办证") -> "第一次办理港澳通行证需要怎么做？"
+            label.contains("续签") || label.contains("签注") -> "已有港澳通行证，签注过期或用完了怎么办？"
+            label.contains("过期") || label.contains("遗失") || label.contains("丢") -> "港澳通行证过期、遗失或损坏了应该怎么办？"
+            label.contains("材料") || label.contains("过关") -> "去香港或澳门过关要带什么材料？"
+            label.contains("不确定") || label.contains("不清楚") -> "我不确定自己属于哪种港澳办理情况，应该怎么判断？"
+            label.endsWith("？") || label.endsWith("?") -> label
+            else -> "$label 应该怎么办？"
+        }
     }
 
     private fun String?.cleanTextOrNull(): String? {

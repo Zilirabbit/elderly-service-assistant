@@ -21,6 +21,7 @@ data class ChatPolicyResponse(
     val original_text: String? = "",
     val search_query: String? = "",
     val display_text: String? = "",
+    val structured_answer: StructuredAnswer? = null,
     val summary: String? = null,
     val conclusion: String? = null,
     val steps: List<String> = emptyList(),
@@ -33,6 +34,24 @@ data class ChatPolicyResponse(
     val tts: TtsInfo? = null,
     val sources: List<SourceItem> = emptyList(),
     val usage: Map<String, Any> = emptyMap(),
+)
+
+data class StructuredAnswer(
+    val title: String = "",
+    val summary: String = "",
+    val scenario_options: List<String> = emptyList(),
+    val steps: List<String> = emptyList(),
+    val materials: MaterialBlock? = MaterialBlock(),
+    val warnings: List<String> = emptyList(),
+    val detail_text: String = "",
+    val source_note: String = "资料依据：知识库中的相关官方指南/政策说明",
+    val confidence: String = "medium",
+    val need_human_reminder: Boolean = true,
+)
+
+data class MaterialBlock(
+    val required: List<String> = emptyList(),
+    val optional: List<String> = emptyList(),
 )
 
 data class ChatMaterialsSection(
