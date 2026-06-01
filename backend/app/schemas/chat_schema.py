@@ -8,7 +8,8 @@ class ChatPolicyRequest(BaseModel):
     conversation_id: str | None = ""
     user_id: str | None = None
     input_type: str | None = "text"
-    tts_language: str | None = "zh-CN"
+    language: str | None = "zh-CN"
+    tts_language: str | None = None
 
 
 class SourceItem(BaseModel):

@@ -5,6 +5,7 @@ data class ChatPolicyRequest(
     val conversation_id: String? = "",
     val user_id: String? = "demo-user-001",
     val input_type: String? = "text",
+    val language: String? = "zh-CN",
     val tts_language: String? = "zh-CN",
 )
 

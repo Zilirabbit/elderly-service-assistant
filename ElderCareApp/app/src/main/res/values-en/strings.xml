@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">YueTongXin</string>
+    <string name="app_subtitle">Bay Area Helper for Older Adults</string>
+    <string name="speech_settings_title">Choose reading voice</string>
+    <string name="speech_settings_desc">The app display follows your phone language. Reading voice can be selected separately.</string>
+    <string name="speech_auto">Auto</string>
+    <string name="speech_mandarin">Mandarin</string>
+    <string name="speech_cantonese">Cantonese</string>
+    <string name="speech_english">English</string>
+    <string name="speech_label_prefix">Voice: </string>
+</resources>

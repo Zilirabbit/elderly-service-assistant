@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.OpenableColumns
@@ -92,7 +93,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -102,7 +105,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.eldercareapp.R
 import com.example.eldercareapp.api.ApiClient
+import com.example.eldercareapp.core.i18n.AppLanguageResolver
 import com.example.eldercareapp.model.MaterialChecklist
 import com.example.eldercareapp.viewmodel.ChatMessageRole
 import com.example.eldercareapp.model.QaAnswerUiModel
@@ -170,6 +175,18 @@ private const val SpeechTargetGuide = "guide"
 private const val SpeechTargetGuidance = "guidance"
 private const val MAX_RECORD_SECONDS = 30
 
+@Composable
+private fun currentDisplayLanguage(): AppLanguageResolver.DisplayLanguage {
+    val configuration = LocalConfiguration.current
+    val locale = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        configuration.locales[0]
+    } else {
+        @Suppress("DEPRECATION")
+        configuration.locale
+    }
+    return AppLanguageResolver.resolveDisplayLanguage(locale)
+}
+
 private data class QaQuickQuestion(
     val label: String,
     val question: String,
@@ -215,6 +232,15 @@ private fun ttsLanguageCode(label: String): String {
         "英语" -> "en"
         "方言" -> "yue"
         else -> "zh-CN"
+    }
+}
+
+private fun speechPreferenceLabelRes(preference: AppLanguageResolver.SpeechLanguagePreference): Int {
+    return when (preference) {
+        AppLanguageResolver.SpeechLanguagePreference.AUTO -> R.string.speech_auto
+        AppLanguageResolver.SpeechLanguagePreference.ZH_CN -> R.string.speech_mandarin
+        AppLanguageResolver.SpeechLanguagePreference.YUE -> R.string.speech_cantonese
+        AppLanguageResolver.SpeechLanguagePreference.EN -> R.string.speech_english
     }
 }
 
@@ -710,9 +736,13 @@ fun ElderCareAppRoot(modifier: Modifier = Modifier) {
     var activeChecklistId by remember { mutableStateOf<String?>(null) }
     var checklistBackTarget by remember { mutableStateOf<OverlayScreen?>(null) }
     var selectedFont by remember { mutableStateOf(fontChoices[2]) }
+    var speechPreference by remember { mutableStateOf(AppLanguageResolver.SpeechLanguagePreference.AUTO) }
     val chatViewModel: ChatViewModel = viewModel()
     val materialViewModel: MaterialViewModel = viewModel()
     val currentDensity = LocalDensity.current
+    val displayLanguage = currentDisplayLanguage()
+    val displayLanguageCode = displayLanguage.apiCode
+    val resolvedSpeechLanguage = AppLanguageResolver.resolveSpeechLanguage(speechPreference, displayLanguage)
 
     BackHandler(enabled = overlayScreen != null || currentTab != MainTab.Home) {
         if (overlayScreen == OverlayScreen.MaterialList && activeChecklistId != null && checklistBackTarget != null) {
@@ -798,6 +828,7 @@ fun ElderCareAppRoot(modifier: Modifier = Modifier) {
                     OverlayScreen.Guide -> GuideScreen(
                         modifier = rootModifier,
                         chatViewModel = chatViewModel,
+                        speechLanguage = resolvedSpeechLanguage,
                         onBack = closeOverlay,
                         onDone = closeOverlay
                     )
@@ -805,6 +836,7 @@ fun ElderCareAppRoot(modifier: Modifier = Modifier) {
                     OverlayScreen.Guidance -> GuidanceScreen(
                         modifier = rootModifier,
                         chatViewModel = chatViewModel,
+                        speechLanguage = resolvedSpeechLanguage,
                         onBack = closeOverlay,
                         onOpenMaterialList = { checklistId -> openMaterialChecklist(checklistId, null) },
                         onOpenDetailedPolicy = { standardQuestion ->
@@ -812,7 +844,12 @@ fun ElderCareAppRoot(modifier: Modifier = Modifier) {
                             activeChecklistId = null
                             checklistBackTarget = null
                             currentTab = MainTab.Chat
-                            chatViewModel.submitPrefilledQuestion(standardQuestion, inputType = "guidance")
+                            chatViewModel.submitPrefilledQuestion(
+                                standardQuestion,
+                                inputType = "guidance",
+                                displayLanguage = displayLanguageCode,
+                                speechLanguage = resolvedSpeechLanguage
+                            )
                         }
                     )
 
@@ -877,8 +914,15 @@ fun ElderCareAppRoot(modifier: Modifier = Modifier) {
                             onOpenPortDetail = { overlayScreen = OverlayScreen.PortDetail },
                             onOpenChat = { currentTab = MainTab.Chat },
                             onOpenMaterialList = openMaterialList,
+                            speechPreference = speechPreference,
+                            onSpeechPreferenceChange = { speechPreference = it },
                             onFaqClick = { question ->
-                                chatViewModel.submitPrefilledQuestion(question, inputType = "text")
+                                chatViewModel.submitPrefilledQuestion(
+                                    question,
+                                    inputType = "text",
+                                    displayLanguage = displayLanguageCode,
+                                    speechLanguage = resolvedSpeechLanguage
+                                )
                                 currentTab = MainTab.Chat
                             }
                         )
@@ -886,6 +930,8 @@ fun ElderCareAppRoot(modifier: Modifier = Modifier) {
                         MainTab.Chat -> ChatScreen(
                             modifier = Modifier.padding(innerPadding),
                             chatViewModel = chatViewModel,
+                            displayLanguage = displayLanguageCode,
+                            speechLanguage = resolvedSpeechLanguage,
                             onOpenMaterialList = { openMaterialChecklist("hk_macau_pass_apply", null) },
                             onOpenGuidance = { overlayScreen = OverlayScreen.Guidance },
                             onOpenFontSize = openFont
@@ -917,6 +963,8 @@ private fun HomeScreen(
     onOpenPortDetail: () -> Unit,
     onOpenChat: () -> Unit,
     onOpenMaterialList: () -> Unit,
+    speechPreference: AppLanguageResolver.SpeechLanguagePreference,
+    onSpeechPreferenceChange: (AppLanguageResolver.SpeechLanguagePreference) -> Unit,
     onFaqClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -925,9 +973,13 @@ private fun HomeScreen(
     var region by remember { mutableStateOf("香港") }
     var direction by remember { mutableStateOf("去往港澳") }
     var faqCategory by remember { mutableStateOf("全部") }
-    var selectedVoice by remember { mutableStateOf("普通话") }
     var showVoiceSheet by remember { mutableStateOf(false) }
-    val voiceOptions = listOf("普通话", "粤语", "英语", "关闭朗读")
+    val voiceOptions = listOf(
+        AppLanguageResolver.SpeechLanguagePreference.AUTO,
+        AppLanguageResolver.SpeechLanguagePreference.ZH_CN,
+        AppLanguageResolver.SpeechLanguagePreference.YUE,
+        AppLanguageResolver.SpeechLanguagePreference.EN
+    )
 
     if (showVoiceSheet) {
         ModalBottomSheet(
@@ -942,20 +994,26 @@ private fun HomeScreen(
                 verticalArrangement = Arrangement.spacedBy(responsive.cardSpacing)
             ) {
                 Text(
-                    text = "选择播报语音",
+                    text = stringResource(R.string.speech_settings_title),
                     color = ElderText,
                     fontSize = responsive.cardTitle,
                     fontWeight = FontWeight.Bold
                 )
+                Text(
+                    text = stringResource(R.string.speech_settings_desc),
+                    color = ElderTextMuted,
+                    fontSize = responsive.body
+                )
                 voiceOptions.forEach { option ->
+                    val optionLabel = stringResource(speechPreferenceLabelRes(option))
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(min = 56.dp)
-                            .background(if (option == selectedVoice) ElderBlueSoft else Color.White, RoundedCornerShape(14.dp))
-                            .border(1.dp, if (option == selectedVoice) ElderBlue else ElderLine, RoundedCornerShape(14.dp))
+                            .background(if (option == speechPreference) ElderBlueSoft else Color.White, RoundedCornerShape(14.dp))
+                            .border(1.dp, if (option == speechPreference) ElderBlue else ElderLine, RoundedCornerShape(14.dp))
                             .clickable {
-                                selectedVoice = option
+                                onSpeechPreferenceChange(option)
                                 showVoiceSheet = false
                             }
                             .padding(horizontal = responsive.cardSpacing, vertical = responsive.rowSpacing),
@@ -969,13 +1027,13 @@ private fun HomeScreen(
                             modifier = Modifier.size(responsive.iconSmall)
                         )
                         Text(
-                            text = option,
+                            text = optionLabel,
                             color = ElderText,
                             fontSize = responsive.bodyLarge,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.weight(1f)
                         )
-                        if (option == selectedVoice) {
+                        if (option == speechPreference) {
                             Icon(
                                 imageVector = Icons.Filled.Check,
                                 contentDescription = null,
@@ -993,12 +1051,13 @@ private fun HomeScreen(
         modifier = modifier,
         topBar = {
             UnifiedTopBar(
-                title = "粤同心",
-                subtitle = "湾区中老年助手",
+                title = stringResource(R.string.app_name),
+                subtitle = stringResource(R.string.app_subtitle),
                 gradient = true,
                 actions = listOf(
                     TopBarAction(
-                        label = selectedVoice,
+                        label = stringResource(R.string.speech_label_prefix) +
+                            stringResource(speechPreferenceLabelRes(speechPreference)),
                         icon = Icons.Filled.VolumeUp,
                         onClick = { showVoiceSheet = true },
                         alwaysShowText = true
@@ -1168,6 +1227,8 @@ private fun HomeScreen(
 @Composable
 private fun ChatScreen(
     chatViewModel: ChatViewModel,
+    displayLanguage: String,
+    speechLanguage: String,
     onOpenMaterialList: () -> Unit,
     onOpenGuidance: () -> Unit,
     onOpenFontSize: () -> Unit,
@@ -1182,7 +1243,7 @@ private fun ChatScreen(
     var isRecording by remember { mutableStateOf(false) }
     var voicePanelMessage by remember { mutableStateOf<String?>(null) }
     val chatScrollState = rememberScrollState()
-    val speech = rememberCloudSpeechController(chatViewModel)
+    val speech = rememberCloudSpeechController(chatViewModel, speechLanguage)
 
     DisposableEffect(Unit) {
         onDispose {
@@ -1320,7 +1381,12 @@ private fun ChatScreen(
                     onOpenGuidance()
                 } else {
                     speech.stop()
-                    chatViewModel.submitPrefilledQuestion(item.question, inputType = "quick")
+                    chatViewModel.submitPrefilledQuestion(
+                        item.question,
+                        inputType = "quick",
+                        displayLanguage = displayLanguage,
+                        speechLanguage = speechLanguage
+                    )
                 }
             },
             modifier = chatWidthModifier.align(Alignment.CenterHorizontally)
@@ -1344,7 +1410,12 @@ private fun ChatScreen(
                     examples = qaEmptyExamples,
                     onExampleClick = { question ->
                         speech.stop()
-                        chatViewModel.submitPrefilledQuestion(question, inputType = "example")
+                        chatViewModel.submitPrefilledQuestion(
+                            question,
+                            inputType = "example",
+                            displayLanguage = displayLanguage,
+                            speechLanguage = speechLanguage
+                        )
                     },
                     onGuidanceClick = onOpenGuidance
                 )
@@ -1362,7 +1433,12 @@ private fun ChatScreen(
                                 answer = answer,
                                 onScenarioClick = { option ->
                                     speech.stop()
-                                    chatViewModel.submitPrefilledQuestion(option.standardQuestion, inputType = "scenario")
+                                    chatViewModel.submitPrefilledQuestion(
+                                        option.standardQuestion,
+                                        inputType = "scenario",
+                                        displayLanguage = displayLanguage,
+                                        speechLanguage = speechLanguage
+                                    )
                                 },
                                 onOpenMaterialList = onOpenMaterialList,
                                 onReadAnswer = {
@@ -1370,7 +1446,7 @@ private fun ChatScreen(
                                         spokenText,
                                         target,
                                         message.ttsAudioUrl,
-                                        "zh-CN"
+                                        speechLanguage
                                     )
                                 },
                                 onStopReading = { speech.stop() },
@@ -1387,7 +1463,7 @@ private fun ChatScreen(
                                 source = "知识库资料",
                                 onOpenMaterialList = onOpenMaterialList,
                                 onReadAnswer = {
-                                    speech.speak(message.text, "$SpeechTargetAnswer-${message.id}", null, "zh-CN")
+                                    speech.speak(message.text, "$SpeechTargetAnswer-${message.id}", null, speechLanguage)
                                 },
                                 onStopReading = { speech.stop() },
                                 isPreparing = speech.isPreparingTarget("$SpeechTargetAnswer-${message.id}"),
@@ -1433,7 +1509,12 @@ private fun ChatScreen(
                             if (retryQuestion.isBlank()) {
                                 Toast.makeText(context, "请换个说法再问", Toast.LENGTH_SHORT).show()
                             } else {
-                                chatViewModel.submitPrefilledQuestion(retryQuestion, inputType = "retry")
+                                chatViewModel.submitPrefilledQuestion(
+                                    retryQuestion,
+                                    inputType = "retry",
+                                    displayLanguage = displayLanguage,
+                                    speechLanguage = speechLanguage
+                                )
                             }
                         }
                     )
@@ -1450,7 +1531,7 @@ private fun ChatScreen(
                             draft,
                             SpeechTargetVoiceDraft,
                             null,
-                            ttsLanguageCode(selectedVoiceLanguage)
+                            speechLanguage
                         )
                     },
                     onStopReading = { speech.stop() },
@@ -1458,7 +1539,10 @@ private fun ChatScreen(
                     isSpeaking = speech.isSpeakingTarget(SpeechTargetVoiceDraft),
                     onConfirm = {
                         speech.stop()
-                        chatViewModel.confirmVoiceDraft(ttsLanguageCode(selectedVoiceLanguage))
+                        chatViewModel.confirmVoiceDraft(
+                            displayLanguage = displayLanguage,
+                            speechLanguage = speechLanguage
+                        )
                     },
                     onRetry = {
                         speech.stop()
@@ -1505,7 +1589,12 @@ private fun ChatScreen(
                 onValueChange = chatViewModel::updateInput,
                 enabled = !uiState.isLoading && !uiState.isTranscribing,
                 onVoice = { openVoicePanel() },
-                onSend = { chatViewModel.sendQuestion() }
+                onSend = {
+                    chatViewModel.sendQuestion(
+                        displayLanguage = displayLanguage,
+                        speechLanguage = speechLanguage
+                    )
+                }
             )
         }
     }
@@ -1664,6 +1753,7 @@ private fun CrossBorderPreparePickerScreen(
 @Composable
 private fun GuidanceScreen(
     chatViewModel: ChatViewModel,
+    speechLanguage: String,
     onBack: () -> Unit,
     onOpenMaterialList: (String) -> Unit,
     onOpenDetailedPolicy: (String) -> Unit,
@@ -1671,7 +1761,7 @@ private fun GuidanceScreen(
 ) {
     val context = LocalContext.current
     val responsive = LocalElderResponsive.current
-    val speech = rememberCloudSpeechController(chatViewModel)
+    val speech = rememberCloudSpeechController(chatViewModel, speechLanguage)
     var profile by remember { mutableStateOf(GuidanceProfile()) }
     var result by remember { mutableStateOf<GuidanceResult?>(null) }
     val visibleQuestions = profile.visibleGuidanceQuestions()
@@ -1727,7 +1817,7 @@ private fun GuidanceScreen(
                         if (readAllActive) {
                             speech.stop()
                         } else {
-                            speech.speak(readAllText, SpeechTargetGuidance, null, "zh-CN")
+                            speech.speak(readAllText, SpeechTargetGuidance, null, speechLanguage)
                         }
                     },
                     height = 52.dp
@@ -1747,7 +1837,7 @@ private fun GuidanceScreen(
                         speech.stop()
                     } else {
                         val text = "第${index + 1}题。${question.title}。选项有：${question.options.joinToString("，")}。"
-                        speech.speak(text, target, null, "zh-CN")
+                        speech.speak(text, target, null, speechLanguage)
                     }
                 },
                 onSelected = { answer ->
@@ -2162,10 +2252,11 @@ private fun GuideScreen(
     onBack: () -> Unit,
     onDone: () -> Unit,
     chatViewModel: ChatViewModel,
+    speechLanguage: String,
     modifier: Modifier = Modifier
 ) {
     val responsive = LocalElderResponsive.current
-    val speech = rememberCloudSpeechController(chatViewModel)
+    val speech = rememberCloudSpeechController(chatViewModel, speechLanguage)
     var stepIndex by remember { mutableIntStateOf(0) }
     val steps = listOf(
         GuideStep(Icons.Filled.Email, "第 1 步：点击提问", "在首页点击“点击提问”，进入智能问答页面。"),
@@ -2228,7 +2319,7 @@ private fun GuideScreen(
                         if (guideIsActive) {
                             speech.stop()
                         } else {
-                            speech.speak(guideText, SpeechTargetGuide, null, "zh-CN")
+                            speech.speak(guideText, SpeechTargetGuide, null, speechLanguage)
                         }
                     },
                     height = 54.dp

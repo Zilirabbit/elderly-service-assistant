@@ -138,6 +138,9 @@ class FakeQwenService:
     async def rewrite_tts_text(self, display_text: str, target_language: str) -> TextGenerationResult:
         return TextGenerationResult(text="适合朗读的文本", usage={"tokens": 2}, request_id="tts")
 
+    async def rewrite_display_text(self, source_text: str, target_language: str) -> TextGenerationResult:
+        return TextGenerationResult(text=source_text, usage={"tokens": 1}, request_id="display")
+
 
 class FakeDifyService:
     async def send_chat_message(self, message: str, conversation_id: str, user_id: str):
@@ -217,7 +220,7 @@ class ChatPolicyTtsTest(unittest.IsolatedAsyncioTestCase):
         ):
             response = await chat_routes.chat_policy(ChatPolicyRequest(message="我想办证"))
 
-        self.assertIn("summary", response.answer)
+        self.assertEqual(response.answer, "建议先确认户籍地或居住地办理要求，再准备材料前往办理。")
         self.assertEqual(response.display_text, "建议先确认户籍地或居住地办理要求，再准备材料前往办理。")
         self.assertEqual(response.structured_answer.summary, "一般可以办理，请按当地要求准备材料。")
         self.assertEqual(response.structured_answer.materials.required, ["居民身份证"])

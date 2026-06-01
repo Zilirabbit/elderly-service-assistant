@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException
 from app.config import settings
 from app.schemas.chat_schema import ChatPolicyRequest, ChatPolicyResponse, SourceItem, TtsInfo
 from app.services.dify_service import dify_service, parse_structured_answer
+from app.services.language_service import normalize_display_language, normalize_speech_language
 from app.services.qwen_text_service import qwen_text_service
 from app.services.tts_service import TtsSynthesisError, tts_service
 
@@ -20,7 +21,8 @@ async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
     message_length = len(req.message)
     user_id = req.user_id or settings.default_user_id
     original_text = req.message.strip()
-    tts_language = req.tts_language or "zh-CN"
+    display_language = normalize_display_language(req.language)
+    speech_language = normalize_speech_language(req.tts_language, display_language)
 
     try:
         query_result = await qwen_text_service.rewrite_query(original_text)
@@ -106,7 +108,7 @@ async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
 
     raw_answer = dify_result.get("answer") or ""
     structured_answer = parse_structured_answer(raw_answer)
-    display_text = structured_answer.detail_text or structured_answer.summary or raw_answer
+    display_source_text = structured_answer.detail_text or structured_answer.summary or raw_answer
     conversation_id = dify_result.get("conversation_id") or ""
     metadata = dify_result.get("metadata") or {}
     retriever_resources = metadata.get("retriever_resources") or []
@@ -127,7 +129,35 @@ async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
     ]
 
     try:
-        tts_result = await qwen_text_service.rewrite_tts_text(display_text, tts_language) if display_text else None
+        if display_source_text and hasattr(qwen_text_service, "rewrite_display_text"):
+            display_result = await qwen_text_service.rewrite_display_text(display_source_text, display_language)
+        else:
+            display_result = None
+        display_text = display_result.text if display_result and display_result.text else display_source_text
+        if display_result:
+            usage["display_rewrite"] = display_result.usage
+    except (AttributeError, httpx.HTTPError) as exc:
+        logger.warning(
+            "chat_policy display_rewrite_fallback user_id=%s display_length=%s language=%s error_type=%s",
+            user_id,
+            len(display_source_text),
+            display_language,
+            type(exc).__name__,
+        )
+        display_text = display_source_text
+
+    try:
+        if display_text:
+            try:
+                tts_result = await qwen_text_service.rewrite_tts_text(
+                    display_text,
+                    speech_language,
+                    display_language,
+                )
+            except TypeError:
+                tts_result = await qwen_text_service.rewrite_tts_text(display_text, speech_language)
+        else:
+            tts_result = None
         tts_text = tts_result.text if tts_result and tts_result.text else display_text
         if tts_result:
             usage["tts_rewrite"] = tts_result.usage
@@ -145,7 +175,7 @@ async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
     tts_voice = settings.tts_default_voice
     if tts_text:
         try:
-            tts_audio = await tts_service.synthesize(text=tts_text, language=tts_language)
+            tts_audio = await tts_service.synthesize(text=tts_text, language=speech_language)
             tts_audio_url = tts_audio.audio_url
             tts_cached = tts_audio.cached
             tts_voice = tts_audio.voice
@@ -174,14 +204,14 @@ async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
     )
 
     return ChatPolicyResponse(
-        answer=raw_answer,
+        answer=display_text,
         conversation_id=conversation_id,
         original_text=original_text,
         search_query=search_query,
         display_text=display_text,
         structured_answer=structured_answer,
         tts=TtsInfo(
-            language=tts_language,
+            language=speech_language,
             voice=tts_voice,
             text=tts_text,
             audio_url=tts_audio_url,

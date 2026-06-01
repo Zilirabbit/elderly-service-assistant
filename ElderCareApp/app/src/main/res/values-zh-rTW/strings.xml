@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">粵同心</string>
+    <string name="app_subtitle">灣區中老年助手</string>
+    <string name="speech_settings_title">選擇朗讀聲音</string>
+    <string name="speech_settings_desc">介面和回答顯示會跟隨手機系統語言，朗讀聲音可以單獨選擇。</string>
+    <string name="speech_auto">自動推薦</string>
+    <string name="speech_mandarin">普通話</string>
+    <string name="speech_cantonese">粵語</string>
+    <string name="speech_english">English</string>
+    <string name="speech_label_prefix">朗讀：</string>
+</resources>

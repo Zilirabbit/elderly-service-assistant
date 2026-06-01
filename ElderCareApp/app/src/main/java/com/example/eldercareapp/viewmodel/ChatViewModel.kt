@@ -67,7 +67,8 @@ class ChatViewModel : ViewModel() {
     fun submitPrefilledQuestion(
         question: String,
         inputType: String = "guidance",
-        ttsLanguage: String = "zh-CN",
+        displayLanguage: String = "zh-CN",
+        speechLanguage: String = "zh-CN",
     ) {
         val cleanedQuestion = question.trim()
         if (cleanedQuestion.isBlank()) {
@@ -75,12 +76,18 @@ class ChatViewModel : ViewModel() {
             return
         }
 
-        sendQuestion(questionOverride = cleanedQuestion, inputType = inputType, ttsLanguage = ttsLanguage)
+        sendQuestion(
+            questionOverride = cleanedQuestion,
+            inputType = inputType,
+            displayLanguage = displayLanguage,
+            speechLanguage = speechLanguage
+        )
     }
 
     fun sendQuestion(
         inputType: String = "text",
-        ttsLanguage: String = "zh-CN",
+        displayLanguage: String = "zh-CN",
+        speechLanguage: String = "zh-CN",
         questionOverride: String? = null
     ) {
         val question = questionOverride?.trim() ?: _uiState.value.input.trim()
@@ -121,11 +128,13 @@ class ChatViewModel : ViewModel() {
                         conversation_id = current.conversationId,
                         user_id = "demo-user-001",
                         input_type = inputType,
-                        tts_language = ttsLanguage,
+                        language = displayLanguage,
+                        tts_language = speechLanguage,
                     )
                 )
                 val displayText = response.display_text?.takeIf { it.isNotBlank() } ?: response.answer
                 val cleanedAnswer = cleanMarkdownAnswer(displayText)
+                val shouldUseStructuredAnswer = displayLanguage == "zh-CN"
 
                 if (cleanedAnswer.isBlank()) {
                     _uiState.value = current.copy(
@@ -149,16 +158,18 @@ class ChatViewModel : ViewModel() {
                             ?: source.document_name?.takeIf { it.isNotBlank() }
                     }
                     .distinct()
+                val answerUiModel = response.toQaAnswerUiModel(cleanedAnswer, sourceDocuments)
+                    .takeIf { shouldUseStructuredAnswer }
 
                 _uiState.value = current.copy(
                     input = "",
                     answer = cleanedAnswer,
-                    answerUiModel = response.toQaAnswerUiModel(cleanedAnswer, sourceDocuments),
+                    answerUiModel = answerUiModel,
                     messages = current.messages + ChatMessageUi(
                         id = nextMessageId(),
                         role = ChatMessageRole.Assistant,
                         text = cleanedAnswer,
-                        answerUiModel = response.toQaAnswerUiModel(cleanedAnswer, sourceDocuments),
+                        answerUiModel = answerUiModel,
                         ttsText = cleanMarkdownAnswer(response.tts?.text?.takeIf { it.isNotBlank() } ?: cleanedAnswer),
                         ttsAudioUrl = response.tts?.audio_url
                     ),
@@ -231,14 +242,22 @@ class ChatViewModel : ViewModel() {
         }
     }
 
-    fun confirmVoiceDraft(ttsLanguage: String = "zh-CN") {
+    fun confirmVoiceDraft(
+        displayLanguage: String = "zh-CN",
+        speechLanguage: String = "zh-CN"
+    ) {
         val draft = _uiState.value.voiceDraft?.trim().orEmpty()
         if (draft.isBlank()) {
             _uiState.value = _uiState.value.copy(errorMessage = "没有听清，请重新说一遍，或改用文字输入。")
             return
         }
 
-        sendQuestion(inputType = "voice", ttsLanguage = ttsLanguage, questionOverride = draft)
+        sendQuestion(
+            inputType = "voice",
+            displayLanguage = displayLanguage,
+            speechLanguage = speechLanguage,
+            questionOverride = draft
+        )
     }
 
     fun clearVoiceDraft() {

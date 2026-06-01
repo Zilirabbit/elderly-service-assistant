@@ -7,6 +7,7 @@ from typing import Any
 import httpx
 
 from app.config import settings
+from app.services.language_service import normalize_speech_language
 
 
 AUDIO_CACHE_DIR = Path(__file__).resolve().parents[1] / "data" / "audio_cache"
@@ -17,6 +18,8 @@ VOICE_BY_LANGUAGE = {
     "zh": "longxiaochun_v3",
     "zh-cn": "longxiaochun_v3",
     "zh_cn": "longxiaochun_v3",
+    "zh-hk": "longxiaochun_v3",
+    "zh_hk": "longxiaochun_v3",
     "mandarin": "longxiaochun_v3",
     "yue": "longjiayi_v3",
     "cantonese": "longjiayi_v3",
@@ -51,8 +54,8 @@ class TtsService:
         if not normalized_text:
             return TtsSynthesisResult(
                 text="",
-                language=language or "zh-CN",
-                voice=_resolve_voice(language, voice),
+                language=resolve_tts_language(language),
+                voice=_resolve_voice(resolve_tts_language(language), voice),
                 audio_url=None,
                 cached=False,
             )
@@ -62,7 +65,7 @@ class TtsService:
         if not settings.dashscope_api_key:
             raise TtsSynthesisError("DASHSCOPE_API_KEY is not configured")
 
-        resolved_language = language or "zh-CN"
+        resolved_language = resolve_tts_language(language)
         resolved_voice = _resolve_voice(resolved_language, voice)
         audio_format = _safe_audio_format(settings.tts_audio_format)
         cache_path = _cache_path(normalized_text, resolved_language, resolved_voice, audio_format)
@@ -156,6 +159,15 @@ def _resolve_voice(language: str, voice: str | None) -> str:
 
     normalized_language = (language or "zh-CN").strip().lower()
     return VOICE_BY_LANGUAGE.get(normalized_language, settings.tts_default_voice or "longxiaochun_v3")
+
+
+def resolve_tts_language(language: str | None, display_language: str = "zh-CN") -> str:
+    normalized = normalize_speech_language(language, display_language)
+    if normalized == "en":
+        return "en"
+    if normalized == "yue":
+        return "yue"
+    return "zh-CN"
 
 
 def _language_hint(language: str) -> str:

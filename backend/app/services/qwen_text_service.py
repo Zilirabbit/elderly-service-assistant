@@ -4,6 +4,12 @@ from typing import Any
 import httpx
 
 from app.config import settings
+from app.services.language_service import (
+    display_language_instruction,
+    normalize_display_language,
+    normalize_speech_language,
+    tts_language_instruction,
+)
 
 
 QUERY_REWRITE_PROMPT = """你是政务服务查询改写助手。
@@ -34,6 +40,18 @@ TTS_REWRITE_PROMPT = """你是适老化语音播报文本改写助手。
 7. 只输出播报文本，不要解释。
 """
 
+DISPLAY_REWRITE_PROMPT = """你是适老化政务问答语言整理助手。
+
+任务：
+根据检索到的政策回答，整理成目标显示语言的屏幕展示文本。
+
+要求：
+1. 不改变政策事实。
+2. 不新增没有依据的材料、地点、时限或费用。
+3. 句子要清楚，适合中老年用户理解。
+4. 只输出最终展示文本，不要解释。
+"""
+
 
 @dataclass
 class TextGenerationResult:
@@ -56,8 +74,32 @@ class QwenTextService:
             temperature=0.2,
         )
 
-    async def rewrite_tts_text(self, display_text: str, target_language: str) -> TextGenerationResult:
-        prompt = f"展示文本：\n{display_text.strip()}\n\n目标语言：\n{target_language}"
+    async def rewrite_display_text(self, source_text: str, target_language: str) -> TextGenerationResult:
+        display_language = normalize_display_language(target_language)
+        prompt = (
+            f"政策回答：\n{source_text.strip()}\n\n"
+            f"目标显示语言：\n{display_language}\n\n"
+            f"语言要求：\n{display_language_instruction(display_language)}"
+        )
+        return await self._chat(
+            system_prompt=DISPLAY_REWRITE_PROMPT,
+            user_prompt=prompt,
+            max_tokens=700,
+            temperature=0.25,
+        )
+
+    async def rewrite_tts_text(
+        self,
+        display_text: str,
+        target_language: str,
+        display_language: str = "zh-CN",
+    ) -> TextGenerationResult:
+        speech_language = normalize_speech_language(target_language, display_language)
+        prompt = (
+            f"展示文本：\n{display_text.strip()}\n\n"
+            f"目标朗读语言：\n{speech_language}\n\n"
+            f"朗读要求：\n{tts_language_instruction(speech_language, display_language)}"
+        )
         return await self._chat(
             system_prompt=TTS_REWRITE_PROMPT,
             user_prompt=prompt,
