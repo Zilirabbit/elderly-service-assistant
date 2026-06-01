@@ -326,8 +326,8 @@ class ChatViewModel : ViewModel() {
         val details = structured?.detail_text.cleanTextOrNull() ?: cleanedAnswer
 
         return QaAnswerUiModel(
-            subtitle = structured?.title.cleanTextOrNull()
-                ?: "根据办事资料整理，办理前请以当地窗口要求为准",
+            title = structured?.title.cleanTextOrNull() ?: "我帮您查到这些",
+            subtitle = "根据办事资料整理，办理前请以当地窗口要求为准",
             conclusion = structuredConclusion ?: conciseConclusion(cleanedAnswer),
             scenarioOptions = scenarioOptions,
             steps = stepsFromResponse,

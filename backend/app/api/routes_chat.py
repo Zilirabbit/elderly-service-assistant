@@ -15,6 +15,11 @@ router = APIRouter(prefix="/api/v1", tags=["chat"])
 logger = logging.getLogger("app.chat")
 
 
+def _is_structured_dify_answer(raw_answer: str, parsed_title: str, confidence: str) -> bool:
+    text = (raw_answer or "").strip()
+    return text.startswith("{") and bool(parsed_title.strip()) and confidence != "low"
+
+
 @router.post("/chat-policy", response_model=ChatPolicyResponse)
 async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
     started_at = perf_counter()
@@ -109,6 +114,11 @@ async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
 
     raw_answer = dify_result.get("answer") or ""
     structured_answer = parse_structured_answer(raw_answer)
+    is_structured_dify_answer = _is_structured_dify_answer(
+        raw_answer,
+        structured_answer.title,
+        structured_answer.confidence,
+    )
     display_source_text = structured_answer.detail_text or structured_answer.summary or raw_answer
     conversation_id = dify_result.get("conversation_id") or ""
     metadata = dify_result.get("metadata") or {}
@@ -132,7 +142,11 @@ async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
     ]
 
     try:
-        if display_source_text and hasattr(qwen_text_service, "rewrite_display_text"):
+        if (
+            display_source_text
+            and hasattr(qwen_text_service, "rewrite_display_text")
+            and not (is_structured_dify_answer and display_language == "zh-CN")
+        ):
             display_result = await qwen_text_service.rewrite_display_text(display_source_text, display_language)
         else:
             display_result = None

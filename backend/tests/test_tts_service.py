@@ -132,6 +132,9 @@ class TtsServiceTest(unittest.IsolatedAsyncioTestCase):
 
 
 class FakeQwenService:
+    def __init__(self) -> None:
+        self.display_rewrite_calls = []
+
     async def rewrite_query(self, original_text: str) -> TextGenerationResult:
         return TextGenerationResult(text="标准检索问题", usage={"tokens": 1}, request_id="query")
 
@@ -139,6 +142,7 @@ class FakeQwenService:
         return TextGenerationResult(text="适合朗读的文本", usage={"tokens": 2}, request_id="tts")
 
     async def rewrite_display_text(self, source_text: str, target_language: str) -> TextGenerationResult:
+        self.display_rewrite_calls.append((source_text, target_language))
         return TextGenerationResult(text=source_text, usage={"tokens": 1}, request_id="display")
 
 
@@ -226,13 +230,16 @@ class ChatPolicyTtsTest(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(response.tts.cached)
 
     async def test_chat_policy_includes_structured_answer_when_dify_returns_json(self) -> None:
+        fake_qwen = FakeQwenService()
         with (
-            patch.object(chat_routes, "qwen_text_service", FakeQwenService()),
+            patch.object(chat_routes, "qwen_text_service", fake_qwen),
             patch.object(chat_routes, "dify_service", FakeStructuredDifyService()),
             patch.object(chat_routes, "tts_service", FakeTtsService()),
         ):
             response = await chat_routes.chat_policy(ChatPolicyRequest(message="我想办证"))
 
+        self.assertEqual(fake_qwen.display_rewrite_calls, [])
+        self.assertNotIn("display_rewrite", response.usage)
         self.assertEqual(response.answer, "建议先确认户籍地或居住地办理要求，再准备材料前往办理。")
         self.assertEqual(response.display_text, "建议先确认户籍地或居住地办理要求，再准备材料前往办理。")
         self.assertEqual(response.structured_answer.summary, "一般可以办理，请按当地要求准备材料。")
