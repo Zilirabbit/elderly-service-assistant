@@ -39,7 +39,7 @@ async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
             user_id,
             message_length,
         )
-        raise HTTPException(status_code=504, detail="查询改写响应超时，请稍后再试") from exc
+        query_result = None
     except httpx.HTTPStatusError as exc:
         duration_ms = int((perf_counter() - started_at) * 1000)
         status_code = exc.response.status_code if exc.response is not None else None
@@ -50,7 +50,7 @@ async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
             message_length,
             status_code,
         )
-        raise HTTPException(status_code=502, detail="查询改写服务调用失败") from exc
+        query_result = None
     except httpx.HTTPError as exc:
         duration_ms = int((perf_counter() - started_at) * 1000)
         logger.warning(
@@ -60,9 +60,9 @@ async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
             message_length,
             type(exc).__name__,
         )
-        raise HTTPException(status_code=502, detail="查询改写服务暂时不可用") from exc
+        query_result = None
 
-    rewritten_query = query_result.text or original_text
+    rewritten_query = query_result.text if query_result and query_result.text else original_text
     search_query = original_text
 
     try:
@@ -125,7 +125,7 @@ async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
     retriever_resources = metadata.get("retriever_resources") or []
     usage = {
         "dify": metadata.get("usage") or {},
-        "query_rewrite": query_result.usage,
+        "query_rewrite": query_result.usage if query_result else {"fallback": "original_text"},
         "rewritten_search_query": rewritten_query,
         "dify_query": search_query,
     }

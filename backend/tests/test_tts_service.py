@@ -146,6 +146,11 @@ class FakeQwenService:
         return TextGenerationResult(text=source_text, usage={"tokens": 1}, request_id="display")
 
 
+class FailingQueryRewriteQwenService(FakeQwenService):
+    async def rewrite_query(self, original_text: str) -> TextGenerationResult:
+        raise chat_routes.httpx.HTTPError("query rewrite unavailable")
+
+
 class FakeDifyService:
     def __init__(self) -> None:
         self.messages = []
@@ -228,6 +233,20 @@ class ChatPolicyTtsTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.tts.text, "适合朗读的文本")
         self.assertEqual(response.tts.audio_url, "/static/tts/audio.mp3")
         self.assertFalse(response.tts.cached)
+
+    async def test_chat_policy_continues_when_query_rewrite_is_unavailable(self) -> None:
+        fake_dify = FakeDifyService()
+        with (
+            patch.object(chat_routes, "qwen_text_service", FailingQueryRewriteQwenService()),
+            patch.object(chat_routes, "dify_service", fake_dify),
+            patch.object(chat_routes, "tts_service", FakeTtsService()),
+        ):
+            response = await chat_routes.chat_policy(ChatPolicyRequest(message="去香港过关要准备什么"))
+
+        self.assertEqual(fake_dify.messages, ["去香港过关要准备什么"])
+        self.assertEqual(response.search_query, "去香港过关要准备什么")
+        self.assertEqual(response.usage["query_rewrite"], {"fallback": "original_text"})
+        self.assertEqual(response.answer, "展示文本")
 
     async def test_chat_policy_includes_structured_answer_when_dify_returns_json(self) -> None:
         fake_qwen = FakeQwenService()
