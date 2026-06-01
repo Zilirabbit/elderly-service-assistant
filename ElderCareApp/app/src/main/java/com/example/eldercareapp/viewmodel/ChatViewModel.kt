@@ -134,7 +134,7 @@ class ChatViewModel : ViewModel() {
                 )
                 val displayText = response.display_text?.takeIf { it.isNotBlank() } ?: response.answer
                 val cleanedAnswer = cleanMarkdownAnswer(displayText)
-                val shouldUseStructuredAnswer = displayLanguage == "zh-CN"
+                val shouldUseStructuredAnswer = response.hasUsableStructuredAnswer()
 
                 if (cleanedAnswer.isBlank()) {
                     _uiState.value = current.copy(
@@ -339,6 +339,21 @@ class ChatViewModel : ViewModel() {
             confidence = structured?.confidence.cleanTextOrNull() ?: confidence.cleanTextOrNull(),
             needHumanReminder = structured?.need_human_reminder ?: true
         )
+    }
+
+    private fun ChatPolicyResponse.hasUsableStructuredAnswer(): Boolean {
+        val structured = structured_answer ?: return false
+        if (structured.confidence.equals("low", ignoreCase = true)) return false
+        return listOf(
+            structured.title,
+            structured.summary,
+            structured.detail_text
+        ).any { it.isNotBlank() } ||
+            structured.steps.any { it.isNotBlank() } ||
+            structured.scenario_options.any { it.isNotBlank() } ||
+            structured.materials?.required.orEmpty().any { it.isNotBlank() } ||
+            structured.materials?.optional.orEmpty().any { it.isNotBlank() } ||
+            structured.warnings.any { it.isNotBlank() }
     }
 
     private fun List<String>.cleanedItems(): List<String> {

@@ -27,6 +27,9 @@
   - 当 Dify 已返回完整结构化 JSON，且显示语言为简体中文时，后端直接保留 Dify 的 `title`、`summary`、`scenario_options`、`steps`、`materials`、`warnings`、`detail_text` 等字段。
   - 此时不再调用 Qwen `rewrite_display_text` 重写展示文本，避免把知识库字段压平成另一段回答。
   - 前端结构化卡片主标题改为使用 Dify 返回的 `title`，例如“赴香港过关材料准备”。
+- 已修正结构化卡片启用条件：
+  - 前端不再只在 `zh-CN` 下展示结构化卡片。
+  - 只要后端返回有效 `structured_answer`，繁中/英文系统语言下也优先展示步骤、材料、注意事项和操作按钮，避免退回普通长文本卡片。
 - 已补充一批高频 Android 字符串资源：
   - 主导航。
   - 首页主要卡片。
