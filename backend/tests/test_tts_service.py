@@ -143,7 +143,11 @@ class FakeQwenService:
 
 
 class FakeDifyService:
+    def __init__(self) -> None:
+        self.messages = []
+
     async def send_chat_message(self, message: str, conversation_id: str, user_id: str):
+        self.messages.append(message)
         return {
             "answer": "展示文本",
             "conversation_id": "conversation-1",
@@ -155,7 +159,11 @@ class FakeDifyService:
 
 
 class FakeStructuredDifyService:
+    def __init__(self) -> None:
+        self.messages = []
+
     async def send_chat_message(self, message: str, conversation_id: str, user_id: str):
+        self.messages.append(message)
         return {
             "answer": """
             {
@@ -200,14 +208,19 @@ class FailingTtsService:
 
 class ChatPolicyTtsTest(unittest.IsolatedAsyncioTestCase):
     async def test_chat_policy_includes_tts_audio_url_when_synthesis_succeeds(self) -> None:
+        fake_dify = FakeDifyService()
         with (
             patch.object(chat_routes, "qwen_text_service", FakeQwenService()),
-            patch.object(chat_routes, "dify_service", FakeDifyService()),
+            patch.object(chat_routes, "dify_service", fake_dify),
             patch.object(chat_routes, "tts_service", FakeTtsService()),
         ):
             response = await chat_routes.chat_policy(ChatPolicyRequest(message="我想办证"))
 
         self.assertEqual(response.answer, "展示文本")
+        self.assertEqual(fake_dify.messages, ["我想办证"])
+        self.assertEqual(response.search_query, "我想办证")
+        self.assertEqual(response.usage["dify_query"], "我想办证")
+        self.assertEqual(response.usage["rewritten_search_query"], "标准检索问题")
         self.assertEqual(response.tts.text, "适合朗读的文本")
         self.assertEqual(response.tts.audio_url, "/static/tts/audio.mp3")
         self.assertFalse(response.tts.cached)

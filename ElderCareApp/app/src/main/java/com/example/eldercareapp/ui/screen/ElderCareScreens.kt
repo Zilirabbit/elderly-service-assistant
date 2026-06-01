@@ -890,16 +890,16 @@ fun ElderCareAppRoot(modifier: Modifier = Modifier) {
                     bottomBar = {
                         UnifiedBottomNav(
                             items = listOf(
-                                BottomNavItemSpec("首页", Icons.Filled.Home, currentTab == MainTab.Home) {
+                                BottomNavItemSpec(stringResource(R.string.nav_home), Icons.Filled.Home, currentTab == MainTab.Home) {
                                     currentTab = MainTab.Home
                                 },
-                                BottomNavItemSpec("问答", Icons.Filled.Email, currentTab == MainTab.Chat) {
+                                BottomNavItemSpec(stringResource(R.string.nav_chat), Icons.Filled.Email, currentTab == MainTab.Chat) {
                                     currentTab = MainTab.Chat
                                 },
-                                BottomNavItemSpec("服务", Icons.Filled.List, currentTab == MainTab.Service) {
+                                BottomNavItemSpec(stringResource(R.string.nav_service), Icons.Filled.List, currentTab == MainTab.Service) {
                                     currentTab = MainTab.Service
                                 },
-                                BottomNavItemSpec("我的", Icons.Filled.Person, currentTab == MainTab.My) {
+                                BottomNavItemSpec(stringResource(R.string.nav_my), Icons.Filled.Person, currentTab == MainTab.My) {
                                     currentTab = MainTab.My
                                 }
                             )
@@ -1062,7 +1062,7 @@ private fun HomeScreen(
                         onClick = { showVoiceSheet = true },
                         alwaysShowText = true
                     ),
-                    TopBarAction("字体", Icons.Filled.Settings, onClick = onOpenFontSize)
+                    TopBarAction(stringResource(R.string.common_font), Icons.Filled.Settings, onClick = onOpenFontSize)
                 )
             )
         }
@@ -1076,13 +1076,13 @@ private fun HomeScreen(
                     IconBadge(icon = Icons.Filled.Email, size = responsive.iconLarge)
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)) {
                         Text(
-                            text = "您好，我来帮您办事",
+                            text = stringResource(R.string.home_hero_title),
                             color = ElderText,
                             fontSize = responsive.topBarTitle,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "查政策、看材料、问流程，都可以直接提问。",
+                            text = stringResource(R.string.home_hero_desc),
                             color = ElderTextMuted,
                             fontSize = responsive.body
                         )
@@ -1091,7 +1091,7 @@ private fun HomeScreen(
                 AdaptivePairRow(
                     first = { itemModifier ->
                         PrimaryActionButton(
-                            text = "点击提问",
+                            text = stringResource(R.string.home_ask),
                             icon = Icons.Filled.Email,
                             onClick = onOpenChat,
                             modifier = itemModifier
@@ -1099,7 +1099,7 @@ private fun HomeScreen(
                     },
                     second = { itemModifier ->
                         SecondaryActionButton(
-                            text = "操作指南",
+                            text = stringResource(R.string.home_guide),
                             icon = Icons.Filled.Info,
                             onClick = onOpenGuide,
                             modifier = itemModifier
@@ -1121,7 +1121,7 @@ private fun HomeScreen(
                     IconBadge(icon = Icons.Filled.Call, size = responsive.iconMedium)
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)) {
                         Text(
-                            text = "遇到问题，找人帮您",
+                            text = stringResource(R.string.home_help_title),
                             color = ElderText,
                             fontSize = responsive.cardTitle,
                             fontWeight = FontWeight.Bold,
@@ -1129,7 +1129,7 @@ private fun HomeScreen(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "不会操作、材料不清楚，可以联系人工或志愿者协助。",
+                            text = stringResource(R.string.home_help_desc),
                             color = ElderTextMuted,
                             fontSize = responsive.body,
                             maxLines = 2,
@@ -1139,19 +1139,19 @@ private fun HomeScreen(
                 }
                 if (responsive.stackActionRows) {
                     PrimaryActionButton(
-                        text = "联系客服",
+                        text = stringResource(R.string.home_contact_service),
                         icon = Icons.Filled.Call,
                         onClick = { Toast.makeText(context, "客服功能暂未接入", Toast.LENGTH_SHORT).show() },
                         height = 52.dp
                     )
                     SecondaryActionButton(
-                        text = "志愿者协助",
+                        text = stringResource(R.string.home_volunteer_help),
                         icon = Icons.Filled.Favorite,
                         onClick = { Toast.makeText(context, "志愿者协助暂未接入", Toast.LENGTH_SHORT).show() },
                         height = 52.dp
                     )
                     SecondaryActionButton(
-                        text = "视频讲解",
+                        text = stringResource(R.string.home_video_guide),
                         icon = Icons.Filled.PlayArrow,
                         onClick = { Toast.makeText(context, "视频讲解暂未接入", Toast.LENGTH_SHORT).show() },
                         height = 52.dp
@@ -1159,21 +1159,21 @@ private fun HomeScreen(
                 } else {
                     Row(horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)) {
                         PrimaryActionButton(
-                            text = "联系客服",
+                            text = stringResource(R.string.home_contact_service),
                             icon = Icons.Filled.Call,
                             onClick = { Toast.makeText(context, "客服功能暂未接入", Toast.LENGTH_SHORT).show() },
                             modifier = Modifier.weight(1f),
                             height = 52.dp
                         )
                         SecondaryActionButton(
-                            text = "志愿者协助",
+                            text = stringResource(R.string.home_volunteer_help),
                             icon = Icons.Filled.Favorite,
                             onClick = { Toast.makeText(context, "志愿者协助暂未接入", Toast.LENGTH_SHORT).show() },
                             modifier = Modifier.weight(1f),
                             height = 52.dp
                         )
                         SecondaryActionButton(
-                            text = "视频讲解",
+                            text = stringResource(R.string.home_video_guide),
                             icon = Icons.Filled.PlayArrow,
                             onClick = { Toast.makeText(context, "视频讲解暂未接入", Toast.LENGTH_SHORT).show() },
                             modifier = Modifier.weight(1f),
@@ -1197,18 +1197,18 @@ private fun HomeScreen(
             )
         }
 
-        SectionTitle(text = "常用口岸")
+        SectionTitle(text = stringResource(R.string.home_ports))
         ports.forEach { port ->
             PortSummaryCard(port = port, onClick = onOpenPortDetail)
         }
         SecondaryActionButton(
-            text = "查看全部口岸",
+            text = stringResource(R.string.home_all_ports),
             icon = Icons.Filled.List,
             onClick = onOpenPortDetail,
             height = 52.dp
         )
 
-        SectionTitle(text = "常见问题")
+        SectionTitle(text = stringResource(R.string.home_faq))
         FaqSection(
             selectedCategory = faqCategory,
             onCategorySelected = { faqCategory = it },
@@ -1216,8 +1216,8 @@ private fun HomeScreen(
         )
 
         ActionCard(
-            title = "我的材料清单",
-            subtitle = "保存证件、表格和办事草稿",
+            title = stringResource(R.string.home_saved_materials),
+            subtitle = stringResource(R.string.home_saved_materials_desc),
             icon = Icons.Filled.List,
             onClick = onOpenMaterialList
         )
@@ -1364,13 +1364,13 @@ private fun ChatScreen(
             .background(ElderBackground)
     ) {
         UnifiedTopBar(
-            title = "智能问答",
+            title = stringResource(R.string.chat_title),
             elevated = true,
             actions = listOf(
-                TopBarAction("历史", Icons.Filled.DateRange) {
-                    Toast.makeText(context, "查看问答历史", Toast.LENGTH_SHORT).show()
+                TopBarAction(stringResource(R.string.common_history), Icons.Filled.DateRange) {
+                    Toast.makeText(context, context.getString(R.string.chat_history_toast), Toast.LENGTH_SHORT).show()
                 },
-                TopBarAction("字体", Icons.Filled.Settings, onClick = onOpenFontSize)
+                TopBarAction(stringResource(R.string.common_font), Icons.Filled.Settings, onClick = onOpenFontSize)
             )
         )
 
@@ -1451,16 +1451,16 @@ private fun ChatScreen(
                                 },
                                 onStopReading = { speech.stop() },
                                 onContinueClick = {
-                                    Toast.makeText(context, "可以继续输入您的问题", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, context.getString(R.string.chat_continue_toast), Toast.LENGTH_SHORT).show()
                                 },
                                 isPreparing = speech.isPreparingTarget(target),
                                 isSpeaking = speech.isSpeakingTarget(target)
                             )
                         } else if (message.text.isNotBlank()) {
                             AssistantAnswerCard(
-                                title = "我帮您查到这些",
+                                title = stringResource(R.string.chat_answer_title),
                                 body = message.text,
-                                source = "知识库资料",
+                                source = stringResource(R.string.chat_source_kb),
                                 onOpenMaterialList = onOpenMaterialList,
                                 onReadAnswer = {
                                     speech.speak(message.text, "$SpeechTargetAnswer-${message.id}", null, speechLanguage)
@@ -1479,7 +1479,7 @@ private fun ChatScreen(
             }
 
             if (uiState.isTranscribing) {
-                QaLoadingCard(text = voicePanelMessage ?: "正在识别您的语音，请稍候...")
+                QaLoadingCard(text = voicePanelMessage ?: stringResource(R.string.chat_transcribing))
             }
 
             if (uiState.lastVoiceSampleName.isNotBlank()) {
@@ -1629,7 +1629,7 @@ private fun ServiceScreen(
 
     ScreenColumn(
         modifier = modifier,
-        topBar = { UnifiedTopBar(title = "服务", gradient = true) }
+        topBar = { UnifiedTopBar(title = stringResource(R.string.nav_service), gradient = true) }
     ) {
         SoftCard(containerColor = ElderBlueSoft, borderColor = Color(0xFFBFD8FF)) {
             Column(modifier = Modifier.padding(responsive.cardPadding), verticalArrangement = Arrangement.spacedBy(responsive.cardSpacing)) {
@@ -1640,31 +1640,31 @@ private fun ServiceScreen(
                     IconBadge(icon = Icons.Filled.Search, size = responsive.iconLarge)
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)) {
                         Text(
-                            text = "港澳通行证 / 签注办理判断",
+                            text = stringResource(R.string.service_guidance_title),
                             color = ElderText,
                             fontSize = responsive.cardTitle,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "回答 5 个问题，先判断自己该办哪一种",
+                            text = stringResource(R.string.service_guidance_desc),
                             color = ElderTextMuted,
                             fontSize = responsive.body
                         )
                     }
                 }
                 PrimaryActionButton(
-                    text = "我不知道该办哪种",
+                    text = stringResource(R.string.service_guidance_action),
                     icon = Icons.Filled.KeyboardArrowRight,
                     onClick = onOpenGuidance,
                     height = 58.dp
                 )
             }
         }
-        SectionTitle(text = "出发/到达服务")
+        SectionTitle(text = stringResource(R.string.service_departure))
         ServiceGrid(items = travelServices, onClick = toast)
-        SectionTitle(text = "其他服务")
+        SectionTitle(text = stringResource(R.string.service_other))
         ServiceGrid(items = otherServices, onClick = toast)
-        NoticeCard(text = "部分服务暂未开放，后续将逐步接入。")
+        NoticeCard(text = stringResource(R.string.service_not_ready))
     }
 }
 
@@ -2455,7 +2455,7 @@ private fun MaterialListScreen(
         modifier = modifier.safeDrawingPadding(),
         topBar = {
             UnifiedTopBar(
-                title = "材料清单",
+                title = stringResource(R.string.common_material_list),
                 showBack = true,
                 leadingIcon = Icons.Filled.ArrowBack,
                 onBack = onBack,
@@ -2464,7 +2464,7 @@ private fun MaterialListScreen(
         }
     ) {
         if (uiState.isLoading && uiState.items.isEmpty()) {
-            LoadingCard(text = "正在加载材料清单，请稍候...")
+            LoadingCard(text = stringResource(R.string.common_loading_materials))
         }
 
         uiState.errorMessage?.takeIf { it.isNotBlank() }?.let { message ->
@@ -2474,7 +2474,7 @@ private fun MaterialListScreen(
             )
         }
 
-        SectionTitle(text = "请选择要办理的事项")
+        SectionTitle(text = stringResource(R.string.material_choose_item))
         uiState.items.forEach { item ->
             ActionCard(
                 title = item.title,
@@ -2488,7 +2488,7 @@ private fun MaterialListScreen(
                 onClick = { onOpenChecklist(item.code) }
             )
         }
-        NoticeCard(text = "清单来自本地 Mock 数据，办理前仍请以现场和官方要求为准。")
+        NoticeCard(text = stringResource(R.string.material_mock_notice))
     }
 }
 
@@ -2519,7 +2519,7 @@ private fun MaterialChecklistScreen(
         containerColor = ElderBackground,
         topBar = {
             UnifiedTopBar(
-                title = currentChecklist?.title ?: "材料清单",
+                title = currentChecklist?.title ?: stringResource(R.string.common_material_list),
                 showBack = true,
                 leadingIcon = Icons.Filled.ArrowBack,
                 onBack = onBack,
@@ -2537,11 +2537,11 @@ private fun MaterialChecklistScreen(
                     .padding(horizontal = responsive.pagePadding, vertical = responsive.rowSpacing)
             ) {
                 PrimaryActionButton(
-                    text = if (isSaved) "更新清单" else "保存清单",
+                    text = if (isSaved) stringResource(R.string.material_update) else stringResource(R.string.material_save),
                     icon = Icons.Filled.Check,
                     onClick = {
                         materialViewModel.saveSelectedChecklist()
-                        Toast.makeText(context, "已保存到我的材料清单", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, context.getString(R.string.material_saved_toast), Toast.LENGTH_SHORT).show()
                     },
                     enabled = currentChecklist != null && !uiState.isLoading,
                     height = 58.dp
@@ -2570,7 +2570,7 @@ private fun MaterialChecklistScreen(
                 verticalArrangement = Arrangement.spacedBy(responsive.pageSpacing)
             ) {
                 when {
-                    uiState.isLoading && currentChecklist == null -> LoadingCard(text = "正在加载材料清单，请稍候...")
+                    uiState.isLoading && currentChecklist == null -> LoadingCard(text = stringResource(R.string.common_loading_materials))
                     uiState.errorMessage != null && currentChecklist == null -> MaterialErrorCard(
                         message = uiState.errorMessage.orEmpty(),
                         onRetry = { materialViewModel.selectItem(checklistId) }
@@ -2585,7 +2585,7 @@ private fun MaterialChecklistScreen(
                     )
 
                     else -> MaterialErrorCard(
-                        message = "暂时没有找到这个事项的材料清单。",
+                        message = stringResource(R.string.material_not_found),
                         onRetry = { materialViewModel.selectItem(checklistId) }
                     )
                 }
@@ -2600,9 +2600,9 @@ private fun SavedMaterialsSection(
     onChecklistClick: (String) -> Unit
 ) {
     val responsive = LocalElderResponsive.current
-    SectionTitle(text = "我的材料清单", icon = Icons.Filled.Check)
+    SectionTitle(text = stringResource(R.string.home_saved_materials), icon = Icons.Filled.Check)
     if (savedChecklists.isEmpty()) {
-        NoticeCard(text = "还没有保存的材料清单\n您可以在服务页或办理判断结果页查看并保存清单。")
+        NoticeCard(text = stringResource(R.string.material_empty_saved))
         return
     }
 
@@ -2627,7 +2627,7 @@ private fun SavedMaterialsSection(
                         fontSize = responsive.label
                     )
                 }
-                StatusPill(text = "继续核对", color = ElderGreen, background = ElderGreenSoft)
+                StatusPill(text = stringResource(R.string.material_continue_check), color = ElderGreen, background = ElderGreenSoft)
             }
         }
     }
@@ -2651,7 +2651,7 @@ private fun MaterialErrorCard(message: String, onRetry: () -> Unit) {
                     modifier = Modifier.weight(1f)
                 )
             }
-            SecondaryActionButton("重新加载", Icons.Filled.Refresh, onRetry, height = 52.dp)
+            SecondaryActionButton(stringResource(R.string.common_retry_reload), Icons.Filled.Refresh, onRetry, height = 52.dp)
         }
     }
 }
@@ -2665,10 +2665,10 @@ private fun MaterialChecklistDetail(
     onOpenLinkedChecklist: (String) -> Unit
 ) {
     val responsive = LocalElderResponsive.current
-    SectionTitle(text = "办理提醒", icon = Icons.Filled.Info)
+    SectionTitle(text = stringResource(R.string.material_reminder), icon = Icons.Filled.Info)
     NoticeCard(text = checklist.tips.joinToString("\n"))
 
-    SectionTitle(text = "材料核对", icon = Icons.Filled.List)
+    SectionTitle(text = stringResource(R.string.material_check), icon = Icons.Filled.List)
     Text(
         text = "已核对 ${checkedIds.size} / ${checklist.requirements.size} 项",
         color = ElderBlueDark,
@@ -3004,13 +3004,13 @@ private fun QaEmptyState(
                 IconBadge(icon = Icons.Filled.Search, size = responsive.iconMedium)
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "您好，我可以帮您查询港澳办事问题",
+                        text = stringResource(R.string.chat_empty_title),
                         color = ElderText,
                         fontSize = responsive.cardTitle,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "您可以这样问：",
+                        text = stringResource(R.string.chat_empty_hint),
                         color = ElderTextMuted,
                         fontSize = responsive.body
                     )
@@ -3027,13 +3027,13 @@ private fun QaEmptyState(
             }
 
             Text(
-                text = "不知道怎么问？",
+                text = stringResource(R.string.chat_unsure_prompt),
                 color = ElderTextMuted,
                 fontSize = responsive.label,
                 fontWeight = FontWeight.Bold
             )
             PrimaryActionButton(
-                text = "我不确定，帮我判断",
+                text = stringResource(R.string.chat_unsure_action),
                 icon = Icons.Filled.Search,
                 onClick = onGuidanceClick,
                 height = 56.dp
@@ -3085,13 +3085,13 @@ private fun AssistantStructuredAnswerCard(
 
             if (answer.steps.isNotEmpty()) {
                 QaInfoSection(
-                    title = "怎么办",
+                    title = stringResource(R.string.qa_how_to),
                     items = answer.steps,
                     numbered = true
                 )
             } else {
                 QaInfoSection(
-                    title = "详细说明",
+                    title = stringResource(R.string.qa_details),
                     items = listOf(details.ifBlank { answer.conclusion }),
                     numbered = false
                 )
@@ -3102,14 +3102,14 @@ private fun AssistantStructuredAnswerCard(
                 optionalMaterials = answer.optionalMaterials
             )
             QaInfoSection(
-                title = "注意事项",
+                title = stringResource(R.string.qa_warnings),
                 items = answer.warnings,
                 numbered = false
             )
             if (details.isNotBlank() && details != answer.conclusion) {
                 QaDetailSection(details)
             }
-            QaSourceNotice(answer.sourceTitle ?: "知识库资料")
+            QaSourceNotice(answer.sourceTitle ?: stringResource(R.string.chat_source_kb))
             QaAnswerActions(
                 isPreparing = isPreparing,
                 isSpeaking = isSpeaking,
@@ -3134,7 +3134,7 @@ private fun QaConclusionBox(conclusion: String) {
         verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)
     ) {
         Text(
-            text = "结论",
+            text = stringResource(R.string.qa_conclusion),
             color = ElderBlueDark,
             fontSize = responsive.label,
             fontWeight = FontWeight.Bold
@@ -3158,7 +3158,7 @@ private fun QaScenarioChips(
     val responsive = LocalElderResponsive.current
     Column(verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)) {
         Text(
-            text = "您是哪种情况？",
+            text = stringResource(R.string.qa_scenario_question),
             color = ElderText,
             fontSize = responsive.label,
             fontWeight = FontWeight.Bold
@@ -3212,26 +3212,26 @@ private fun QaMaterialSummarySection(
     val responsive = LocalElderResponsive.current
     Column(verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)) {
         Text(
-            text = "需要什么材料",
+            text = stringResource(R.string.qa_materials),
             color = ElderText,
             fontSize = responsive.bodyLarge,
             fontWeight = FontWeight.Bold
         )
         if (requiredMaterials.isEmpty() && optionalMaterials.isEmpty()) {
             Text(
-                text = "本次回答没有明确列出材料项，请打开材料清单或以窗口要求为准。",
+                text = stringResource(R.string.qa_no_materials),
                 color = ElderTextMuted,
                 fontSize = responsive.body
             )
         } else {
             if (requiredMaterials.isNotEmpty()) {
-                Text("必备材料：", color = ElderTextMuted, fontSize = responsive.label, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.qa_required_materials), color = ElderTextMuted, fontSize = responsive.label, fontWeight = FontWeight.Bold)
                 requiredMaterials.forEach { item ->
                     Text(text = "- $item", color = Color(0xFF25334A), fontSize = responsive.body)
                 }
             }
             if (optionalMaterials.isNotEmpty()) {
-                Text("可能还需要：", color = ElderTextMuted, fontSize = responsive.label, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.qa_optional_materials), color = ElderTextMuted, fontSize = responsive.label, fontWeight = FontWeight.Bold)
                 optionalMaterials.forEach { item ->
                     Text(text = "- $item", color = Color(0xFF25334A), fontSize = responsive.body)
                 }
@@ -3246,7 +3246,7 @@ private fun QaDetailSection(detailText: String) {
     var expanded by remember(detailText) { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)) {
         Text(
-            text = "详细说明",
+            text = stringResource(R.string.qa_details),
             color = ElderText,
             fontSize = responsive.bodyLarge,
             fontWeight = FontWeight.Bold
@@ -3260,7 +3260,7 @@ private fun QaDetailSection(detailText: String) {
         )
         if (detailText.length > 90) {
             Text(
-                text = if (expanded) "收起说明" else "展开完整说明",
+                text = if (expanded) stringResource(R.string.qa_collapse) else stringResource(R.string.qa_expand),
                 color = ElderBlue,
                 fontSize = responsive.label,
                 fontWeight = FontWeight.Bold,
@@ -3292,7 +3292,7 @@ private fun QaAnswerActions(
 ) {
     val isReadingActive = isPreparing || isSpeaking
     PrimaryActionButton(
-        text = "查看材料清单",
+        text = stringResource(R.string.qa_open_materials),
         icon = Icons.Filled.List,
         onClick = onOpenMaterialList,
         height = 56.dp
@@ -3301,9 +3301,9 @@ private fun QaAnswerActions(
         first = { itemModifier ->
             SecondaryActionButton(
                 text = when {
-                    isPreparing -> "准备朗读..."
-                    isSpeaking -> "停止朗读"
-                    else -> "朗读回答"
+                    isPreparing -> stringResource(R.string.qa_read_prepare)
+                    isSpeaking -> stringResource(R.string.qa_read_stop)
+                    else -> stringResource(R.string.qa_read_answer)
                 },
                 icon = if (isReadingActive) Icons.Filled.Stop else Icons.Filled.VolumeUp,
                 onClick = if (isReadingActive) onStopReading else onReadAnswer,
@@ -3313,7 +3313,7 @@ private fun QaAnswerActions(
         },
         second = { itemModifier ->
             SecondaryActionButton(
-                text = "继续追问",
+                text = stringResource(R.string.qa_continue),
                 icon = Icons.Filled.Refresh,
                 onClick = onContinueClick,
                 modifier = itemModifier,
@@ -3324,8 +3324,8 @@ private fun QaAnswerActions(
 }
 
 @Composable
-private fun QaLoadingCard(text: String = "正在查询相关办事资料...") {
-    LoadingCard(text = text)
+private fun QaLoadingCard(text: String? = null) {
+    LoadingCard(text = text ?: stringResource(R.string.chat_loading))
 }
 
 @Composable
@@ -3424,9 +3424,9 @@ private fun AssistantAnswerCard(
                 first = { itemModifier ->
                     SecondaryActionButton(
                         when {
-                            isPreparing -> "准备朗读..."
-                            isSpeaking -> "停止朗读"
-                            else -> "朗读回答"
+                            isPreparing -> stringResource(R.string.qa_read_prepare)
+                            isSpeaking -> stringResource(R.string.qa_read_stop)
+                            else -> stringResource(R.string.qa_read_answer)
                         },
                         if (isReadingActive) Icons.Filled.Stop else Icons.Filled.VolumeUp,
                         if (isReadingActive) onStopReading else onReadAnswer,
@@ -3436,7 +3436,7 @@ private fun AssistantAnswerCard(
                 },
                 second = { itemModifier ->
                     SecondaryActionButton(
-                        "查看材料清单",
+                        stringResource(R.string.qa_open_materials),
                         Icons.Filled.List,
                         onOpenMaterialList,
                         modifier = itemModifier,
@@ -3445,7 +3445,7 @@ private fun AssistantAnswerCard(
                 }
             )
             SecondaryActionButton(
-                "继续追问",
+                stringResource(R.string.qa_continue),
                 Icons.Filled.Refresh,
                 { Toast.makeText(context, "请在下方输入框继续提问", Toast.LENGTH_SHORT).show() },
                 height = 52.dp

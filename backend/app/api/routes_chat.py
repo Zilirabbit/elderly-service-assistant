@@ -57,7 +57,8 @@ async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
         )
         raise HTTPException(status_code=502, detail="查询改写服务暂时不可用") from exc
 
-    search_query = query_result.text or original_text
+    rewritten_query = query_result.text or original_text
+    search_query = original_text
 
     try:
         dify_result = await dify_service.send_chat_message(
@@ -115,6 +116,8 @@ async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
     usage = {
         "dify": metadata.get("usage") or {},
         "query_rewrite": query_result.usage,
+        "rewritten_search_query": rewritten_query,
+        "dify_query": search_query,
     }
 
     sources = [
