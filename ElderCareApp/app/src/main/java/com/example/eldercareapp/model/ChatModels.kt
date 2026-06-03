@@ -62,10 +62,10 @@ data class ChatMaterialsSection(
 )
 
 data class QaAnswerUiModel(
-    val title: String = "我帮您查到这些",
-    val subtitle: String = "根据办事资料整理，办理前请以当地窗口要求为准",
+    val title: String = "",
+    val subtitle: String = "",
     val conclusion: String = "",
-    val scenarioOptions: List<QaScenarioOption> = defaultQaScenarioOptions(),
+    val scenarioOptions: List<QaScenarioOption> = emptyList(),
     val steps: List<String> = emptyList(),
     val requiredMaterials: List<String> = emptyList(),
     val optionalMaterials: List<String> = emptyList(),
@@ -79,25 +79,6 @@ data class QaAnswerUiModel(
 data class QaScenarioOption(
     val label: String,
     val standardQuestion: String,
-)
-
-fun defaultQaScenarioOptions(): List<QaScenarioOption> = listOf(
-    QaScenarioOption(
-        label = "首次办理",
-        standardQuestion = "第一次办理港澳通行证需要怎么做？"
-    ),
-    QaScenarioOption(
-        label = "已有证件续签",
-        standardQuestion = "已有港澳通行证，签注过期或用完了怎么办？"
-    ),
-    QaScenarioOption(
-        label = "证件过期/遗失",
-        standardQuestion = "港澳通行证过期、遗失或损坏了应该怎么办？"
-    ),
-    QaScenarioOption(
-        label = "我不确定",
-        standardQuestion = "我不确定自己属于哪种港澳办理情况，应该怎么判断？"
-    )
 )
 
 data class TtsInfo(

@@ -144,6 +144,7 @@ import com.example.eldercareapp.ui.component.UnifiedBottomNav
 import com.example.eldercareapp.ui.component.UnifiedTopBar
 import com.example.eldercareapp.ui.component.elderResponsiveSpec
 import com.example.eldercareapp.viewmodel.ChatViewModel
+import com.example.eldercareapp.viewmodel.ChatUiStrings
 import com.example.eldercareapp.viewmodel.MaterialViewModel
 import com.example.eldercareapp.viewmodel.SavedMaterialChecklist
 import com.example.eldercareapp.voice.VoiceRecorder
@@ -188,35 +189,49 @@ private fun currentDisplayLanguage(): AppLanguageResolver.DisplayLanguage {
 }
 
 private data class QaQuickQuestion(
-    val label: String,
+    val labelResId: Int,
     val question: String,
     val openGuidance: Boolean = false,
 )
 
+private data class QaEmptyExample(
+    val labelResId: Int,
+    val question: String,
+)
+
 private val qaQuickQuestions = listOf(
     QaQuickQuestion(
-        label = "首次办证",
+        labelResId = R.string.qa_quick_first_permit,
         question = "第一次办理港澳通行证需要怎么做？"
     ),
     QaQuickQuestion(
-        label = "签注续签",
+        labelResId = R.string.qa_quick_endorsement,
         question = "已有港澳通行证，签注过期或用完了怎么办？"
     ),
     QaQuickQuestion(
-        label = "过关材料",
+        labelResId = R.string.qa_quick_border_materials,
         question = "去香港澳门口岸过关需要准备什么材料？"
     ),
     QaQuickQuestion(
-        label = "我不确定",
+        labelResId = R.string.qa_quick_unsure,
         question = "我不确定自己属于哪种港澳办理情况，应该怎么判断？",
         openGuidance = true
     )
 )
 
 private val qaEmptyExamples = listOf(
-    "第一次办港澳通行证要带什么？",
-    "签注过期了怎么办？",
-    "去香港过关要准备什么？"
+    QaEmptyExample(
+        labelResId = R.string.qa_example_first_permit,
+        question = "第一次办港澳通行证要带什么？"
+    ),
+    QaEmptyExample(
+        labelResId = R.string.qa_example_endorsement_expired,
+        question = "签注过期了怎么办？"
+    ),
+    QaEmptyExample(
+        labelResId = R.string.qa_example_border_materials,
+        question = "去香港过关要准备什么？"
+    )
 )
 
 private fun voiceLanguageCode(label: String): String {
@@ -242,6 +257,37 @@ private fun speechPreferenceLabelRes(preference: AppLanguageResolver.SpeechLangu
         AppLanguageResolver.SpeechLanguagePreference.YUE -> R.string.speech_cantonese
         AppLanguageResolver.SpeechLanguagePreference.EN -> R.string.speech_english
     }
+}
+
+@Composable
+private fun chatUiStrings(): ChatUiStrings {
+    return ChatUiStrings(
+        emptyQuestionError = stringResource(R.string.chat_error_empty_question),
+        noKnowledgeAnswer = stringResource(R.string.chat_error_no_knowledge),
+        voiceNotClear = stringResource(R.string.chat_error_voice_not_clear),
+        voiceNotClearConfirm = stringResource(R.string.chat_error_voice_not_clear_confirm),
+        queryFailed = stringResource(R.string.chat_error_query_failed),
+        voiceTimeout = stringResource(R.string.chat_error_voice_timeout),
+        recordingTooLarge = stringResource(R.string.chat_error_recording_too_large),
+        voiceServiceBusy = stringResource(R.string.chat_error_voice_service_busy),
+        backendUnavailable = stringResource(R.string.chat_error_backend_unavailable),
+        voiceFailed = stringResource(R.string.chat_error_voice_failed),
+        networkUnstable = stringResource(R.string.chat_error_network_unstable),
+        voiceNoResponse = stringResource(R.string.chat_error_voice_no_response),
+        fallbackWarning = stringResource(R.string.qa_fallback_warning),
+        fallbackTitle = stringResource(R.string.chat_answer_title),
+        fallbackSubtitle = stringResource(R.string.qa_fallback_subtitle),
+        sourceKnowledgeBase = stringResource(R.string.chat_source_kb),
+        sourcePermitGuide = stringResource(R.string.qa_source_permit_guide),
+        scenarioFirstPermit = stringResource(R.string.qa_scenario_first_permit),
+        scenarioRenewal = stringResource(R.string.qa_scenario_renewal),
+        scenarioExpiredOrLost = stringResource(R.string.qa_scenario_expired_lost),
+        scenarioUnsure = stringResource(R.string.qa_scenario_unsure),
+    )
+}
+
+private fun isVoiceNotClearMessage(message: String, uiStrings: ChatUiStrings): Boolean {
+    return message == uiStrings.voiceNotClear || message == uiStrings.voiceNotClearConfirm
 }
 
 private class CloudSpeechController(
@@ -363,7 +409,7 @@ private fun rememberCloudSpeechController(
             try {
                 val generatedUrl = chatViewModel.synthesizeSpeech(
                     text = content,
-                    language = requestedLanguage.ifBlank { language },
+                    language = safeSpeechLanguageForAdHocText(content, requestedLanguage.ifBlank { language }, existingUrl),
                 )
                 if (speechRequestId != requestId || activeTarget != target) {
                     return@launch
@@ -1237,6 +1283,7 @@ private fun ChatScreen(
     val uiState by chatViewModel.uiState.collectAsState()
     val context = LocalContext.current
     val responsive = LocalElderResponsive.current
+    val uiStrings = chatUiStrings()
     val voiceRecorder = remember { VoiceRecorder() }
     var showVoicePanel by remember { mutableStateOf(false) }
     var selectedVoiceLanguage by remember { mutableStateOf("普通话") }
@@ -1255,14 +1302,19 @@ private fun ChatScreen(
         if (isRecording) {
             delay(MAX_RECORD_SECONDS * 1000L)
             if (isRecording) {
-                voicePanelMessage = "录音已自动结束，正在识别..."
+                voicePanelMessage = context.getString(R.string.voice_recording_auto_stopped)
                 val file = voiceRecorder.stop()
                 isRecording = false
                 showVoicePanel = false
                 if (file == null) {
-                    Toast.makeText(context, "录音时间太短，请重新说一遍", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.voice_recording_too_short), Toast.LENGTH_SHORT).show()
                 } else {
-                    chatViewModel.transcribeVoice(file, voiceLanguageCode(selectedVoiceLanguage), "现场录音")
+                    chatViewModel.transcribeVoice(
+                        file,
+                        voiceLanguageCode(selectedVoiceLanguage),
+                        context.getString(R.string.voice_sample_live_recording),
+                        uiStrings
+                    )
                 }
             }
         }
@@ -1284,7 +1336,7 @@ private fun ChatScreen(
         if (granted) {
             showVoicePanel = true
         } else {
-            Toast.makeText(context, "需要麦克风权限才能语音提问", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.voice_permission_required), Toast.LENGTH_SHORT).show()
         }
     }
     val audioSampleLauncher = rememberLauncherForActivityResult(
@@ -1294,7 +1346,7 @@ private fun ChatScreen(
 
         val sampleFile = copyAudioSampleToCache(context, uri)
         if (sampleFile == null) {
-            Toast.makeText(context, "音频样本读取失败，请换一个文件", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.voice_sample_read_failed), Toast.LENGTH_SHORT).show()
             return@rememberLauncherForActivityResult
         }
 
@@ -1303,7 +1355,8 @@ private fun ChatScreen(
         chatViewModel.transcribeVoice(
             file = sampleFile,
             language = voiceLanguageCode(selectedVoiceLanguage),
-            sampleName = getDisplayNameForUri(context, uri)
+            sampleName = getDisplayNameForUri(context, uri),
+            uiStrings = uiStrings
         )
     }
 
@@ -1328,7 +1381,7 @@ private fun ChatScreen(
             isRecording = true
         } catch (exc: Exception) {
             isRecording = false
-            Toast.makeText(context, "录音启动失败，请检查麦克风权限", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.voice_recording_start_failed), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -1338,10 +1391,15 @@ private fun ChatScreen(
         isRecording = false
         showVoicePanel = false
         if (file == null) {
-            Toast.makeText(context, "录音时间太短，请重新说一遍", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.voice_recording_too_short), Toast.LENGTH_SHORT).show()
             return
         }
-        chatViewModel.transcribeVoice(file, voiceLanguageCode(selectedVoiceLanguage), "现场录音")
+        chatViewModel.transcribeVoice(
+            file,
+            voiceLanguageCode(selectedVoiceLanguage),
+            context.getString(R.string.voice_sample_live_recording),
+            uiStrings
+        )
     }
 
     fun stopRecording() {
@@ -1385,7 +1443,8 @@ private fun ChatScreen(
                         item.question,
                         inputType = "quick",
                         displayLanguage = displayLanguage,
-                        speechLanguage = speechLanguage
+                        speechLanguage = speechLanguage,
+                        uiStrings = uiStrings
                     )
                 }
             },
@@ -1414,7 +1473,8 @@ private fun ChatScreen(
                             question,
                             inputType = "example",
                             displayLanguage = displayLanguage,
-                            speechLanguage = speechLanguage
+                            speechLanguage = speechLanguage,
+                            uiStrings = uiStrings
                         )
                     },
                     onGuidanceClick = onOpenGuidance
@@ -1437,7 +1497,8 @@ private fun ChatScreen(
                                         option.standardQuestion,
                                         inputType = "scenario",
                                         displayLanguage = displayLanguage,
-                                        speechLanguage = speechLanguage
+                                        speechLanguage = speechLanguage,
+                                        uiStrings = uiStrings
                                     )
                                 },
                                 onOpenMaterialList = onOpenMaterialList,
@@ -1457,13 +1518,14 @@ private fun ChatScreen(
                                 isSpeaking = speech.isSpeakingTarget(target)
                             )
                         } else if (message.text.isNotBlank()) {
+                            val spokenText = message.ttsText.ifBlank { message.text }
                             AssistantAnswerCard(
                                 title = stringResource(R.string.chat_answer_title),
                                 body = message.text,
                                 source = stringResource(R.string.chat_source_kb),
                                 onOpenMaterialList = onOpenMaterialList,
                                 onReadAnswer = {
-                                    speech.speak(message.text, "$SpeechTargetAnswer-${message.id}", null, speechLanguage)
+                                    speech.speak(spokenText, "$SpeechTargetAnswer-${message.id}", message.ttsAudioUrl, speechLanguage)
                                 },
                                 onStopReading = { speech.stop() },
                                 isPreparing = speech.isPreparingTarget("$SpeechTargetAnswer-${message.id}"),
@@ -1490,9 +1552,9 @@ private fun ChatScreen(
             }
 
             uiState.errorMessage?.takeIf { it.isNotBlank() }?.let { message ->
-                if (message.contains("没有听清")) {
+                if (isVoiceNotClearMessage(message, uiStrings)) {
                     VoiceErrorCard(
-                        message = "没有听清，请重新说一遍，或改用文字输入。",
+                        message = uiStrings.voiceNotClearConfirm,
                         onRetry = {
                             chatViewModel.clearVoiceDraft()
                             showVoicePanel = true
@@ -1507,13 +1569,14 @@ private fun ChatScreen(
                         onRetry = {
                             val retryQuestion = uiState.input.ifBlank { uiState.lastQuestion }
                             if (retryQuestion.isBlank()) {
-                                Toast.makeText(context, "请换个说法再问", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, context.getString(R.string.chat_retry_rephrase_toast), Toast.LENGTH_SHORT).show()
                             } else {
                                 chatViewModel.submitPrefilledQuestion(
                                     retryQuestion,
                                     inputType = "retry",
                                     displayLanguage = displayLanguage,
-                                    speechLanguage = speechLanguage
+                                    speechLanguage = speechLanguage,
+                                    uiStrings = uiStrings
                                 )
                             }
                         }
@@ -1522,10 +1585,11 @@ private fun ChatScreen(
             }
 
             uiState.voiceDraft?.let { draft ->
-                val isSampleDraft = uiState.lastVoiceSampleName.isNotBlank() && uiState.lastVoiceSampleName != "现场录音"
+                val liveRecordingLabel = stringResource(R.string.voice_sample_live_recording)
+                val isSampleDraft = uiState.lastVoiceSampleName.isNotBlank() && uiState.lastVoiceSampleName != liveRecordingLabel
                 VoiceConfirmCard(
                     draft = draft,
-                    retryText = if (isSampleDraft) "重新选择" else "重新说一遍",
+                    retryText = if (isSampleDraft) stringResource(R.string.voice_retry_pick_sample) else stringResource(R.string.voice_retry_record),
                     onReadDraft = {
                         speech.speak(
                             draft,
@@ -1541,7 +1605,8 @@ private fun ChatScreen(
                         speech.stop()
                         chatViewModel.confirmVoiceDraft(
                             displayLanguage = displayLanguage,
-                            speechLanguage = speechLanguage
+                            speechLanguage = speechLanguage,
+                            uiStrings = uiStrings
                         )
                     },
                     onRetry = {
@@ -1592,7 +1657,8 @@ private fun ChatScreen(
                 onSend = {
                     chatViewModel.sendQuestion(
                         displayLanguage = displayLanguage,
-                        speechLanguage = speechLanguage
+                        speechLanguage = speechLanguage,
+                        uiStrings = uiStrings
                     )
                 }
             )
@@ -2937,7 +3003,7 @@ private fun QaQuickQuestionChips(
         verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)
     ) {
         Text(
-            text = "常问事项：",
+            text = stringResource(R.string.qa_common_questions),
             color = ElderText,
             fontSize = responsive.label,
             fontWeight = FontWeight.Bold
@@ -2949,7 +3015,7 @@ private fun QaQuickQuestionChips(
         ) {
             items.forEach { item ->
                 QaChip(
-                    text = item.label,
+                    text = stringResource(item.labelResId),
                     onClick = { onClick(item) }
                 )
             }
@@ -2987,7 +3053,7 @@ private fun QaChip(
 
 @Composable
 private fun QaEmptyState(
-    examples: List<String>,
+    examples: List<QaEmptyExample>,
     onExampleClick: (String) -> Unit,
     onGuidanceClick: () -> Unit
 ) {
@@ -3017,11 +3083,11 @@ private fun QaEmptyState(
                 }
             }
 
-            examples.forEach { question ->
+            examples.forEach { example ->
                 SecondaryActionButton(
-                    text = question,
+                    text = stringResource(example.labelResId),
                     icon = Icons.Filled.KeyboardArrowRight,
-                    onClick = { onExampleClick(question) },
+                    onClick = { onExampleClick(example.question) },
                     height = 52.dp
                 )
             }
@@ -3273,9 +3339,8 @@ private fun QaDetailSection(detailText: String) {
 @Composable
 private fun QaSourceNotice(sourceTitle: String) {
     val responsive = LocalElderResponsive.current
-    val notice = if (sourceTitle.startsWith("资料")) sourceTitle else "资料来源：$sourceTitle"
     Text(
-        text = notice,
+        text = stringResource(R.string.qa_source_prefix, sourceTitle),
         color = ElderTextMuted,
         fontSize = responsive.labelSmall
     )
@@ -3331,7 +3396,12 @@ private fun QaLoadingCard(text: String? = null) {
 @Composable
 private fun QaErrorCard(message: String, onRetry: () -> Unit) {
     val responsive = LocalElderResponsive.current
-    val retryText = if (message.contains("知识库")) "换个说法再问" else "重新查询"
+    val noKnowledgeAnswer = stringResource(R.string.chat_error_no_knowledge)
+    val retryText = if (message == noKnowledgeAnswer) {
+        stringResource(R.string.chat_retry_rephrase)
+    } else {
+        stringResource(R.string.chat_retry_query)
+    }
     SoftCard(containerColor = Color.White, borderColor = Color(0xFFFFC9C2)) {
         Column(
             modifier = Modifier.padding(responsive.cardPadding),
@@ -3381,6 +3451,21 @@ private fun QaAnswerUiModel.readableText(): String {
             append(warnings.joinToString("。"))
         }
     }
+}
+
+private fun safeSpeechLanguageForAdHocText(text: String, requestedLanguage: String, audioUrl: String?): String {
+    if (!audioUrl.isNullOrBlank()) return requestedLanguage
+    if (requestedLanguage != "yue") return requestedLanguage
+    return if (looksLikeLongMandarinWrittenText(text)) "zh-CN" else requestedLanguage
+}
+
+private fun looksLikeLongMandarinWrittenText(text: String): Boolean {
+    val normalized = text.replace(Regex("""\s+"""), "")
+    if (normalized.length < 80) return false
+    val hasChinese = normalized.any { it in '\u4e00'..'\u9fff' }
+    if (!hasChinese) return false
+    val cantoneseMarkers = listOf("点搞", "點搞", "唔", "咁", "嘅", "啲", "冇", "使唔使", "边度", "邊度")
+    return cantoneseMarkers.none { normalized.contains(it) }
 }
 
 @Composable
@@ -3447,7 +3532,7 @@ private fun AssistantAnswerCard(
             SecondaryActionButton(
                 stringResource(R.string.qa_continue),
                 Icons.Filled.Refresh,
-                { Toast.makeText(context, "请在下方输入框继续提问", Toast.LENGTH_SHORT).show() },
+                { Toast.makeText(context, context.getString(R.string.chat_continue_toast), Toast.LENGTH_SHORT).show() },
                 height = 52.dp
             )
         }
@@ -3481,7 +3566,7 @@ private fun UserBubble(text: String) {
 }
 
 @Composable
-private fun LoadingCard(text: String = "正在查询官方资料，请稍候...") {
+private fun LoadingCard(text: String? = null) {
     val responsive = LocalElderResponsive.current
     SoftCard {
         Row(
@@ -3491,7 +3576,7 @@ private fun LoadingCard(text: String = "正在查询官方资料，请稍候..."
         ) {
             CircularProgressIndicator(color = ElderBlue, modifier = Modifier.size(28.dp), strokeWidth = 3.dp)
             Text(
-                text = text,
+                text = text ?: stringResource(R.string.chat_loading_official),
                 color = ElderText,
                 fontSize = responsive.body,
                 fontWeight = FontWeight.Bold
@@ -3512,7 +3597,7 @@ private fun VoiceSampleInfoCard(name: String, sizeBytes: Long) {
             ) {
                 IconBadge(icon = Icons.Filled.Mic, size = responsive.iconSmall + 18.dp)
                 Text(
-                    text = "音频样本：$sizeText",
+                    text = stringResource(R.string.voice_sample_prefix, sizeText),
                     color = ElderText,
                     fontSize = responsive.body,
                     fontWeight = FontWeight.Bold,
@@ -3567,7 +3652,7 @@ private fun getDisplayNameForUri(context: Context, uri: Uri): String {
             return cursor.getString(index).orEmpty().ifBlank { uri.lastPathSegment.orEmpty() }
         }
     }
-    return uri.lastPathSegment.orEmpty().ifBlank { "音频样本" }
+    return uri.lastPathSegment.orEmpty().ifBlank { context.getString(R.string.voice_sample_default_name) }
 }
 
 @Composable
@@ -3593,7 +3678,7 @@ private fun VoiceConfirmCard(
                 IconBadge(icon = Icons.Filled.Mic, size = responsive.iconMedium)
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "我听到的是",
+                        text = stringResource(R.string.voice_confirm_title),
                         color = ElderText,
                         fontSize = responsive.cardTitle,
                         fontWeight = FontWeight.Bold,
@@ -3601,7 +3686,7 @@ private fun VoiceConfirmCard(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "请确认后发送",
+                        text = stringResource(R.string.voice_confirm_subtitle),
                         color = ElderTextMuted,
                         fontSize = responsive.label,
                         maxLines = 1,
@@ -3626,9 +3711,9 @@ private fun VoiceConfirmCard(
             if (responsive.stackActionRows) {
                 SecondaryActionButton(
                     when {
-                        isPreparing -> "准备中"
-                        isSpeaking -> "停止"
-                        else -> "朗读"
+                        isPreparing -> stringResource(R.string.voice_read_prepare)
+                        isSpeaking -> stringResource(R.string.voice_read_stop)
+                        else -> stringResource(R.string.voice_read)
                     },
                     if (isReadingActive) Icons.Filled.Stop else Icons.Filled.VolumeUp,
                     if (isReadingActive) onStopReading else onReadDraft,
@@ -3639,16 +3724,16 @@ private fun VoiceConfirmCard(
                         SecondaryActionButton(retryText, Icons.Filled.Refresh, onRetry, modifier = itemModifier, height = 52.dp)
                     },
                     second = { itemModifier ->
-                        SecondaryActionButton("手动修改", Icons.Filled.Edit, onEdit, modifier = itemModifier, height = 52.dp)
+                        SecondaryActionButton(stringResource(R.string.voice_manual_edit), Icons.Filled.Edit, onEdit, modifier = itemModifier, height = 52.dp)
                     }
                 )
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)) {
                     SecondaryActionButton(
                         when {
-                            isPreparing -> "准备中"
-                            isSpeaking -> "停止"
-                            else -> "朗读"
+                            isPreparing -> stringResource(R.string.voice_read_prepare)
+                            isSpeaking -> stringResource(R.string.voice_read_stop)
+                            else -> stringResource(R.string.voice_read)
                         },
                         if (isReadingActive) Icons.Filled.Stop else Icons.Filled.VolumeUp,
                         if (isReadingActive) onStopReading else onReadDraft,
@@ -3656,10 +3741,10 @@ private fun VoiceConfirmCard(
                         height = 52.dp
                     )
                     SecondaryActionButton(retryText, Icons.Filled.Refresh, onRetry, modifier = Modifier.weight(1f), height = 52.dp)
-                    SecondaryActionButton("手动修改", Icons.Filled.Edit, onEdit, modifier = Modifier.weight(1f), height = 52.dp)
+                    SecondaryActionButton(stringResource(R.string.voice_manual_edit), Icons.Filled.Edit, onEdit, modifier = Modifier.weight(1f), height = 52.dp)
                 }
             }
-            PrimaryActionButton("发送查询", Icons.Filled.Check, onConfirm, height = 54.dp)
+            PrimaryActionButton(stringResource(R.string.voice_send_query), Icons.Filled.Check, onConfirm, height = 54.dp)
         }
     }
 }
@@ -3692,7 +3777,7 @@ private fun VoiceErrorCard(
             AdaptivePairRow(
                 first = { itemModifier ->
                     SecondaryActionButton(
-                        text = "重新说一遍",
+                        text = stringResource(R.string.voice_retry_record),
                         icon = Icons.Filled.Refresh,
                         onClick = onRetry,
                         modifier = itemModifier,
@@ -3701,7 +3786,7 @@ private fun VoiceErrorCard(
                 },
                 second = { itemModifier ->
                     SecondaryActionButton(
-                        text = "手动输入",
+                        text = stringResource(R.string.voice_manual_input),
                         icon = Icons.Filled.Edit,
                         onClick = onManualInput,
                         modifier = itemModifier,
@@ -3740,7 +3825,7 @@ private fun VoiceInputPanel(
                 )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (isRecording) "正在听您说话" else "语音提问",
+                        text = if (isRecording) stringResource(R.string.voice_recording_title) else stringResource(R.string.voice_panel_title),
                         color = ElderText,
                         fontSize = responsive.cardTitle,
                         fontWeight = FontWeight.Bold,
@@ -3748,7 +3833,7 @@ private fun VoiceInputPanel(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = if (isRecording) "说完后点停止" else "选择语种后说话",
+                        text = if (isRecording) stringResource(R.string.voice_recording_subtitle) else stringResource(R.string.voice_panel_subtitle),
                         color = ElderTextMuted,
                         fontSize = responsive.label,
                         maxLines = 1,
@@ -3762,7 +3847,7 @@ private fun VoiceInputPanel(
                         .clickable(onClick = onCancel),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Filled.Close, contentDescription = "关闭语音面板", tint = ElderBlue)
+                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.voice_close_panel), tint = ElderBlue)
                 }
             }
 
@@ -3782,7 +3867,7 @@ private fun VoiceInputPanel(
             }
 
             PrimaryActionButton(
-                text = if (isRecording) "停止并识别" else "开始说话",
+                text = if (isRecording) stringResource(R.string.voice_stop_and_recognize) else stringResource(R.string.voice_start_speaking),
                 icon = if (isRecording) Icons.Filled.Stop else Icons.Filled.Mic,
                 onClick = if (isRecording) onStopRecording else onStartRecording,
                 enabled = enabled && !statusMessage.orEmpty().contains("正在识别"),
@@ -3791,14 +3876,14 @@ private fun VoiceInputPanel(
             )
             if (isRecording) {
                 SecondaryActionButton(
-                    text = "取消",
+                    text = stringResource(R.string.common_cancel),
                     icon = Icons.Filled.Close,
                     onClick = onCancel,
                     height = 52.dp
                 )
             } else {
                 SecondaryActionButton(
-                    text = "选择音频样本",
+                    text = stringResource(R.string.voice_pick_sample),
                     icon = Icons.Filled.Search,
                     onClick = onPickSample,
                     height = 52.dp
@@ -3834,7 +3919,7 @@ private fun ChatInputBar(
                 .clickable(enabled = enabled, onClick = onVoice),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Filled.Mic, contentDescription = "语音输入", tint = Color.White, modifier = Modifier.size(responsive.iconSmall))
+            Icon(Icons.Filled.Mic, contentDescription = stringResource(R.string.voice_input_content_description), tint = Color.White, modifier = Modifier.size(responsive.iconSmall))
         }
         Box(
             modifier = Modifier
@@ -3855,7 +3940,7 @@ private fun ChatInputBar(
                 modifier = Modifier.fillMaxWidth(),
                 decorationBox = { innerTextField ->
                     if (value.isBlank()) {
-                        Text("输入或语音提问", color = Color(0xFFA0AABA), fontSize = responsive.body)
+                        Text(stringResource(R.string.chat_input_placeholder), color = Color(0xFFA0AABA), fontSize = responsive.body)
                     }
                     innerTextField()
                 }
@@ -3870,7 +3955,7 @@ private fun ChatInputBar(
         ) {
             Icon(
                 Icons.Filled.Send,
-                contentDescription = "发送",
+                contentDescription = stringResource(R.string.chat_send_content_description),
                 tint = if (sendEnabled) Color.White else Color(0xFF9AA6B6),
                 modifier = Modifier.size(responsive.iconSmall)
             )

@@ -8,7 +8,6 @@ import com.example.eldercareapp.model.ChatPolicyResponse
 import com.example.eldercareapp.model.QaAnswerUiModel
 import com.example.eldercareapp.model.QaScenarioOption
 import com.example.eldercareapp.model.TtsSynthesizeRequest
-import com.example.eldercareapp.model.defaultQaScenarioOptions
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -55,6 +54,30 @@ data class ChatUiState(
     val errorMessage: String? = null,
 )
 
+data class ChatUiStrings(
+    val emptyQuestionError: String = "请先输入您想咨询的问题",
+    val noKnowledgeAnswer: String = "暂时没有在知识库中找到明确说明。建议咨询当地出入境窗口或官方渠道。",
+    val voiceNotClear: String = "没有听清，请重新说一遍或手动输入。",
+    val voiceNotClearConfirm: String = "没有听清，请重新说一遍，或改用文字输入。",
+    val queryFailed: String = "查询失败，请稍后再试。",
+    val voiceTimeout: String = "语音识别时间有点久，请稍后再试一次。",
+    val recordingTooLarge: String = "录音文件太大，请缩短录音后重试。",
+    val voiceServiceBusy: String = "语音识别服务暂时繁忙，请稍后再试。",
+    val backendUnavailable: String = "后端服务暂时不可用，请稍后再试。",
+    val voiceFailed: String = "语音识别没有成功，请重新说一遍。",
+    val networkUnstable: String = "网络好像不太稳定，请检查手机和电脑是否在同一网络。",
+    val voiceNoResponse: String = "语音识别暂时没有响应，请重新说一遍或手动输入。",
+    val fallbackWarning: String = "具体要求以当地出入境管理部门或现场窗口为准。",
+    val fallbackTitle: String = "我帮您查到这些",
+    val fallbackSubtitle: String = "根据办事资料整理，办理前请以当地窗口要求为准",
+    val sourceKnowledgeBase: String = "知识库资料",
+    val sourcePermitGuide: String = "港澳通行证办理指南",
+    val scenarioFirstPermit: String = "首次办理",
+    val scenarioRenewal: String = "已有证件续签",
+    val scenarioExpiredOrLost: String = "证件过期/遗失",
+    val scenarioUnsure: String = "我不确定",
+)
+
 class ChatViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
@@ -69,10 +92,11 @@ class ChatViewModel : ViewModel() {
         inputType: String = "guidance",
         displayLanguage: String = "zh-CN",
         speechLanguage: String = "zh-CN",
+        uiStrings: ChatUiStrings = ChatUiStrings(),
     ) {
         val cleanedQuestion = question.trim()
         if (cleanedQuestion.isBlank()) {
-            _uiState.value = _uiState.value.copy(errorMessage = "请先输入您想咨询的问题")
+            _uiState.value = _uiState.value.copy(errorMessage = uiStrings.emptyQuestionError)
             return
         }
 
@@ -80,7 +104,8 @@ class ChatViewModel : ViewModel() {
             questionOverride = cleanedQuestion,
             inputType = inputType,
             displayLanguage = displayLanguage,
-            speechLanguage = speechLanguage
+            speechLanguage = speechLanguage,
+            uiStrings = uiStrings
         )
     }
 
@@ -88,11 +113,12 @@ class ChatViewModel : ViewModel() {
         inputType: String = "text",
         displayLanguage: String = "zh-CN",
         speechLanguage: String = "zh-CN",
-        questionOverride: String? = null
+        questionOverride: String? = null,
+        uiStrings: ChatUiStrings = ChatUiStrings(),
     ) {
         val question = questionOverride?.trim() ?: _uiState.value.input.trim()
         if (question.isEmpty()) {
-            _uiState.value = _uiState.value.copy(errorMessage = "请先输入您想咨询的问题")
+            _uiState.value = _uiState.value.copy(errorMessage = uiStrings.emptyQuestionError)
             return
         }
 
@@ -147,7 +173,7 @@ class ChatViewModel : ViewModel() {
                         ttsText = "",
                         ttsAudioUrl = null,
                         isLoading = false,
-                        errorMessage = "暂时没有在知识库中找到明确说明。建议咨询当地出入境窗口或官方渠道。",
+                        errorMessage = uiStrings.noKnowledgeAnswer,
                     )
                     return@launch
                 }
@@ -158,7 +184,7 @@ class ChatViewModel : ViewModel() {
                             ?: source.document_name?.takeIf { it.isNotBlank() }
                     }
                     .distinct()
-                val answerUiModel = response.toQaAnswerUiModel(cleanedAnswer, sourceDocuments)
+                val answerUiModel = response.toQaAnswerUiModel(cleanedAnswer, sourceDocuments, uiStrings)
                     .takeIf { shouldUseStructuredAnswer }
 
                 _uiState.value = current.copy(
@@ -187,13 +213,18 @@ class ChatViewModel : ViewModel() {
             } catch (exc: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    errorMessage = classifyError(exc),
+                    errorMessage = classifyError(exc, uiStrings),
                 )
             }
         }
     }
 
-    fun transcribeVoice(file: File, language: String, sampleName: String = "") {
+    fun transcribeVoice(
+        file: File,
+        language: String,
+        sampleName: String = "",
+        uiStrings: ChatUiStrings = ChatUiStrings()
+    ) {
         if (_uiState.value.isTranscribing) return
 
         _uiState.value = _uiState.value.copy(
@@ -219,7 +250,7 @@ class ChatViewModel : ViewModel() {
                 if (!isMeaningfulVoiceText(recognizedText)) {
                     _uiState.value = _uiState.value.copy(
                         isTranscribing = false,
-                        errorMessage = "没有听清，请重新说一遍或手动输入。",
+                        errorMessage = uiStrings.voiceNotClear,
                     )
                     return@launch
                 }
@@ -234,7 +265,7 @@ class ChatViewModel : ViewModel() {
             } catch (exc: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isTranscribing = false,
-                    errorMessage = classifyVoiceError(exc),
+                    errorMessage = classifyVoiceError(exc, uiStrings),
                 )
             } finally {
                 file.delete()
@@ -244,11 +275,12 @@ class ChatViewModel : ViewModel() {
 
     fun confirmVoiceDraft(
         displayLanguage: String = "zh-CN",
-        speechLanguage: String = "zh-CN"
+        speechLanguage: String = "zh-CN",
+        uiStrings: ChatUiStrings = ChatUiStrings(),
     ) {
         val draft = _uiState.value.voiceDraft?.trim().orEmpty()
         if (draft.isBlank()) {
-            _uiState.value = _uiState.value.copy(errorMessage = "没有听清，请重新说一遍，或改用文字输入。")
+            _uiState.value = _uiState.value.copy(errorMessage = uiStrings.voiceNotClearConfirm)
             return
         }
 
@@ -256,7 +288,8 @@ class ChatViewModel : ViewModel() {
             inputType = "voice",
             displayLanguage = displayLanguage,
             speechLanguage = speechLanguage,
-            questionOverride = draft
+            questionOverride = draft,
+            uiStrings = uiStrings
         )
     }
 
@@ -289,7 +322,8 @@ class ChatViewModel : ViewModel() {
 
     private fun ChatPolicyResponse.toQaAnswerUiModel(
         cleanedAnswer: String,
-        sourceDocuments: List<String>
+        sourceDocuments: List<String>,
+        uiStrings: ChatUiStrings
     ): QaAnswerUiModel {
         val structured = structured_answer
         val structuredConclusion = listOfNotNull(
@@ -313,21 +347,21 @@ class ChatViewModel : ViewModel() {
         val warningsFromResponse = structured?.warnings.orEmpty().cleanedItems().ifEmpty {
             warnings.cleanedItems()
         }.ifEmpty {
-            listOf("具体要求以当地出入境管理部门或现场窗口为准。")
+            listOf(uiStrings.fallbackWarning)
         }
         val sourceTitle = structured?.source_note.cleanTextOrNull()
             ?: source_title.cleanTextOrNull()
-            ?: sourceDocuments.mapNotNull { friendlySourceTitle(it) }.firstOrNull()
-            ?: "知识库资料"
+            ?: sourceDocuments.mapNotNull { friendlySourceTitle(it, uiStrings) }.firstOrNull()
+            ?: uiStrings.sourceKnowledgeBase
         val scenarioOptions = structured?.scenario_options.orEmpty()
             .cleanedItems()
             .toQaScenarioOptions()
-            .ifEmpty { defaultQaScenarioOptions() }
+            .ifEmpty { defaultQaScenarioOptions(uiStrings) }
         val details = structured?.detail_text.cleanTextOrNull() ?: cleanedAnswer
 
         return QaAnswerUiModel(
-            title = structured?.title.cleanTextOrNull() ?: "我帮您查到这些",
-            subtitle = "根据办事资料整理，办理前请以当地窗口要求为准",
+            title = structured?.title.cleanTextOrNull() ?: uiStrings.fallbackTitle,
+            subtitle = uiStrings.fallbackSubtitle,
             conclusion = structuredConclusion ?: conciseConclusion(cleanedAnswer),
             scenarioOptions = scenarioOptions,
             steps = stepsFromResponse,
@@ -371,6 +405,25 @@ class ChatViewModel : ViewModel() {
         }
     }
 
+    private fun defaultQaScenarioOptions(uiStrings: ChatUiStrings): List<QaScenarioOption> = listOf(
+        QaScenarioOption(
+            label = uiStrings.scenarioFirstPermit,
+            standardQuestion = "第一次办理港澳通行证需要怎么做？"
+        ),
+        QaScenarioOption(
+            label = uiStrings.scenarioRenewal,
+            standardQuestion = "已有港澳通行证，签注过期或用完了怎么办？"
+        ),
+        QaScenarioOption(
+            label = uiStrings.scenarioExpiredOrLost,
+            standardQuestion = "港澳通行证过期、遗失或损坏了应该怎么办？"
+        ),
+        QaScenarioOption(
+            label = uiStrings.scenarioUnsure,
+            standardQuestion = "我不确定自己属于哪种港澳办理情况，应该怎么判断？"
+        )
+    )
+
     private fun scenarioQuestionFor(label: String): String {
         return when {
             label.contains("首次") || label.contains("办证") -> "第一次办理港澳通行证需要怎么做？"
@@ -407,7 +460,7 @@ class ChatViewModel : ViewModel() {
         }
     }
 
-    private fun friendlySourceTitle(raw: String): String? {
+    private fun friendlySourceTitle(raw: String, uiStrings: ChatUiStrings): String? {
         val fileName = raw.substringAfterLast('/').substringAfterLast('\\').trim()
         val withoutExtension = fileName.replace(Regex("""\.(md|pdf|docx?|txt)$""", RegexOption.IGNORE_CASE), "")
         val withoutDate = withoutExtension.replace(Regex("""^\d{4}[-_]\d{2}[-_]\d{2}[-_]?"""), "")
@@ -419,41 +472,41 @@ class ChatViewModel : ViewModel() {
 
         if (readable.isBlank()) return null
         if (readable.contains("港澳") || readable.contains("通行证")) {
-            return "港澳通行证办理指南"
+            return uiStrings.sourcePermitGuide
         }
         if (readable.length > 28 || readable.contains("Phase", ignoreCase = true)) {
-            return "知识库资料"
+            return uiStrings.sourceKnowledgeBase
         }
         return readable
     }
 
-    private fun classifyError(exc: Exception): String {
+    private fun classifyError(exc: Exception, uiStrings: ChatUiStrings): String {
         return when (exc) {
-            is SocketTimeoutException -> "查询失败，请稍后再试。"
+            is SocketTimeoutException -> uiStrings.queryFailed
             is HttpException -> when (exc.code()) {
-                504 -> "查询失败，请稍后再试。"
-                502 -> "查询失败，请稍后再试。"
-                in 500..599 -> "查询失败，请稍后再试。"
-                else -> "查询失败，请稍后再试。"
+                504 -> uiStrings.queryFailed
+                502 -> uiStrings.queryFailed
+                in 500..599 -> uiStrings.queryFailed
+                else -> uiStrings.queryFailed
             }
-            is IOException -> "查询失败，请稍后再试。"
-            else -> "查询失败，请稍后再试。"
+            is IOException -> uiStrings.queryFailed
+            else -> uiStrings.queryFailed
         }
     }
 
-    private fun classifyVoiceError(exc: Exception): String {
+    private fun classifyVoiceError(exc: Exception, uiStrings: ChatUiStrings): String {
         return when (exc) {
-            is SocketTimeoutException -> "语音识别时间有点久，请稍后再试一次。"
+            is SocketTimeoutException -> uiStrings.voiceTimeout
             is HttpException -> when (exc.code()) {
-                400, 422 -> "没有听清，请重新说一遍，或改用文字输入。"
-                413 -> "录音文件太大，请缩短录音后重试。"
-                504 -> "语音识别时间有点久，请稍后再试一次。"
-                502 -> "语音识别服务暂时繁忙，请稍后再试。"
-                in 500..599 -> "后端服务暂时不可用，请稍后再试。"
-                else -> "语音识别没有成功，请重新说一遍。"
+                400, 422 -> uiStrings.voiceNotClearConfirm
+                413 -> uiStrings.recordingTooLarge
+                504 -> uiStrings.voiceTimeout
+                502 -> uiStrings.voiceServiceBusy
+                in 500..599 -> uiStrings.backendUnavailable
+                else -> uiStrings.voiceFailed
             }
-            is IOException -> "网络好像不太稳定，请检查手机和电脑是否在同一网络。"
-            else -> "语音识别暂时没有响应，请重新说一遍或手动输入。"
+            is IOException -> uiStrings.networkUnstable
+            else -> uiStrings.voiceNoResponse
         }
     }
 
