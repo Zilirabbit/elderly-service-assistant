@@ -1,6 +1,7 @@
 package com.example.eldercareapp.viewmodel
 
 import androidx.lifecycle.ViewModel
+import com.example.eldercareapp.R
 import com.example.eldercareapp.model.MaterialChecklist
 import com.example.eldercareapp.model.MaterialItem
 import com.example.eldercareapp.model.MaterialRequirement
@@ -11,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 data class SavedMaterialChecklist(
     val itemCode: String,
     val title: String,
+    val titleResId: Int? = null,
     val checkedCount: Int,
     val totalCount: Int,
     val checkedRequirementIds: Set<String> = emptySet(),
@@ -23,8 +25,8 @@ data class MaterialUiState(
     val checkedRequirementIds: Set<String> = emptySet(),
     val savedChecklists: List<SavedMaterialChecklist> = emptyList(),
     val isLoading: Boolean = false,
-    val errorMessage: String? = null,
-    val saveMessage: String? = null,
+    val errorMessageResId: Int? = null,
+    val saveMessageResId: Int? = null,
 )
 
 class MaterialViewModel : ViewModel() {
@@ -32,9 +34,14 @@ class MaterialViewModel : ViewModel() {
         MaterialChecklist(
             code = "hk_macau_pass_apply",
             title = "办理港澳通行证",
+            titleResId = R.string.material_checklist_apply_title,
             tips = listOf(
                 "首次办理一般需要本人到出入境窗口办理。办理前建议先确认当地出入境大厅预约要求。",
                 "照片回执和申请表要求可能因城市略有差异，请以现场和官方平台为准。"
+            ),
+            tipResIds = listOf(
+                R.string.material_checklist_apply_tip_1,
+                R.string.material_checklist_apply_tip_2
             ),
             requirements = listOf(
                 MaterialRequirement(
@@ -42,68 +49,95 @@ class MaterialViewModel : ViewModel() {
                     name = "居民身份证原件",
                     description = "用于核验本人身份，建议同时准备一份复印件。",
                     required = true,
-                    note = "未满 16 周岁或特殊情况请按窗口要求补充监护材料。"
+                    note = "未满 16 周岁或特殊情况请按窗口要求补充监护材料。",
+                    nameResId = R.string.material_req_resident_id_card_original,
+                    descriptionResId = R.string.material_req_resident_id_card_original_desc,
+                    noteResId = R.string.material_req_resident_id_card_original_note
                 ),
                 MaterialRequirement(
                     id = "entry_exit_photo_receipt",
                     name = "出入境证件照片回执",
                     description = "到有资质照相点拍摄后取得照片回执。",
-                    required = true
+                    required = true,
+                    nameResId = R.string.material_req_photo_receipt,
+                    descriptionResId = R.string.material_req_photo_receipt_desc
                 ),
                 MaterialRequirement(
                     id = "application_form",
                     name = "中国公民出入境证件申请表",
                     description = "可现场填写，也可按当地平台要求提前填写。",
-                    required = true
+                    required = true,
+                    nameResId = R.string.material_req_application_form,
+                    descriptionResId = R.string.material_req_application_form_desc
                 ),
                 MaterialRequirement(
                     id = "appointment_record",
                     name = "预约记录或预约短信",
                     description = "如果当地要求预约，请带上预约成功记录。",
-                    required = false
+                    required = false,
+                    nameResId = R.string.material_req_appointment_record,
+                    descriptionResId = R.string.material_req_appointment_record_desc
                 )
             )
         ),
         MaterialChecklist(
             code = "hk_macau_renewal",
             title = "港澳通行证续签",
+            titleResId = R.string.material_checklist_renewal_title,
             tips = listOf(
                 "先确认港澳通行证仍在有效期内。部分地区可用智能签注设备办理，特殊情况需到窗口。",
                 "如证件损坏、过期或信息变更，可能需要重新办理证件。"
+            ),
+            tipResIds = listOf(
+                R.string.material_checklist_renewal_tip_1,
+                R.string.material_checklist_renewal_tip_2
             ),
             requirements = listOf(
                 MaterialRequirement(
                     id = "valid_hk_macau_pass",
                     name = "有效港澳通行证",
                     description = "请确认通行证未过期、未损坏，个人信息清晰可识别。",
-                    required = true
+                    required = true,
+                    nameResId = R.string.material_req_valid_hk_macau_pass,
+                    descriptionResId = R.string.material_req_valid_hk_macau_pass_desc
                 ),
                 MaterialRequirement(
                     id = "resident_id_card",
                     name = "居民身份证原件",
                     description = "用于现场身份核验或智能设备核验。",
-                    required = true
+                    required = true,
+                    nameResId = R.string.material_req_resident_id_card_original,
+                    descriptionResId = R.string.material_req_resident_id_card_verify_desc
                 ),
                 MaterialRequirement(
                     id = "previous_endorsement",
                     name = "原有签注信息",
                     description = "用于判断签注是否过期、是否仍有有效次数。",
-                    required = false
+                    required = false,
+                    nameResId = R.string.material_req_previous_endorsement,
+                    descriptionResId = R.string.material_req_previous_endorsement_desc
                 ),
                 MaterialRequirement(
                     id = "appointment_record",
                     name = "预约记录或预约短信",
                     description = "如果当地要求预约，请带上预约成功记录。",
-                    required = false
+                    required = false,
+                    nameResId = R.string.material_req_appointment_record,
+                    descriptionResId = R.string.material_req_appointment_record_desc
                 )
             )
         ),
         MaterialChecklist(
             code = "border_crossing_prepare",
             title = "过关材料准备",
+            titleResId = R.string.materials_prepare_title,
             tips = listOf(
                 "出发前先检查证件和签注有效性。常用药品建议保留原包装，并避免携带不明药品。",
                 "老人出行建议提前保存家属电话和紧急联系人。"
+            ),
+            tipResIds = listOf(
+                R.string.material_checklist_border_tip_1,
+                R.string.material_checklist_border_tip_2
             ),
             requirements = listOf(
                 MaterialRequirement(
@@ -112,7 +146,10 @@ class MaterialViewModel : ViewModel() {
                     description = "过关时需要出示，建议放在容易拿取的位置。",
                     required = true,
                     linkedChecklistId = "hk_macau_pass_apply",
-                    linkedActionLabel = "还没有？查看办理材料"
+                    linkedActionLabel = "还没有？查看办理材料",
+                    nameResId = R.string.material_req_hk_macau_pass,
+                    descriptionResId = R.string.material_req_hk_macau_pass_desc,
+                    linkedActionLabelResId = R.string.material_missing_permit_action
                 ),
                 MaterialRequirement(
                     id = "valid_endorsement",
@@ -120,65 +157,89 @@ class MaterialViewModel : ViewModel() {
                     description = "确认目的地、次数和有效期是否满足本次出行。",
                     required = true,
                     linkedChecklistId = "hk_macau_renewal",
-                    linkedActionLabel = "不确定？查看续签材料"
+                    linkedActionLabel = "不确定？查看续签材料",
+                    nameResId = R.string.material_req_valid_endorsement,
+                    descriptionResId = R.string.material_req_valid_endorsement_desc,
+                    linkedActionLabelResId = R.string.material_uncertain_endorsement_action
                 ),
                 MaterialRequirement(
                     id = "resident_id_card",
                     name = "居民身份证",
                     description = "部分交通、住宿或现场核验可能需要。",
-                    required = false
+                    required = false,
+                    nameResId = R.string.material_req_resident_id_card,
+                    descriptionResId = R.string.material_req_resident_id_card_desc
                 ),
                 MaterialRequirement(
                     id = "phone_emergency_contact",
                     name = "手机与紧急联系人信息",
                     description = "建议提前保存家属电话，方便需要时联系。",
-                    required = false
+                    required = false,
+                    nameResId = R.string.material_req_phone_emergency_contact,
+                    descriptionResId = R.string.material_req_phone_emergency_contact_desc
                 ),
                 MaterialRequirement(
                     id = "necessary_medicine",
                     name = "必要药品",
                     description = "如需携带常用药，建议保留原包装并按规定携带。",
-                    required = false
+                    required = false,
+                    nameResId = R.string.material_req_necessary_medicine,
+                    descriptionResId = R.string.material_req_necessary_medicine_desc
                 )
             )
         ),
         MaterialChecklist(
             code = "service_uncertain_valid_pass",
             title = "办理前核对清单",
+            titleResId = R.string.material_checklist_uncertain_title,
             tips = listOf(
                 "您已确认有有效港澳通行证，但还不确定这次具体要办签注、换证、补发还是其他业务。",
                 "建议先带身份证和港澳通行证到窗口，请工作人员核对证件和签注状态。"
+            ),
+            tipResIds = listOf(
+                R.string.material_checklist_uncertain_tip_1,
+                R.string.material_checklist_uncertain_tip_2
             ),
             requirements = listOf(
                 MaterialRequirement(
                     id = "resident_id_card",
                     name = "居民身份证原件",
                     description = "用于窗口或设备核验本人身份。",
-                    required = true
+                    required = true,
+                    nameResId = R.string.material_req_resident_id_card_original,
+                    descriptionResId = R.string.material_req_resident_id_card_verify_desc
                 ),
                 MaterialRequirement(
                     id = "valid_hk_macau_pass",
                     name = "有效港澳通行证",
                     description = "请带上现有证件，方便工作人员核对证件状态。",
-                    required = true
+                    required = true,
+                    nameResId = R.string.material_req_valid_hk_macau_pass,
+                    descriptionResId = R.string.material_req_valid_hk_macau_pass_window_desc
                 ),
                 MaterialRequirement(
                     id = "previous_endorsement",
                     name = "原有签注信息",
                     description = "用于判断签注是否过期、是否仍有有效次数。",
-                    required = false
+                    required = false,
+                    nameResId = R.string.material_req_previous_endorsement,
+                    descriptionResId = R.string.material_req_previous_endorsement_desc
                 ),
                 MaterialRequirement(
                     id = "appointment_record",
                     name = "预约记录或预约短信",
                     description = "如果当地要求预约，请带上预约成功记录。",
-                    required = false
+                    required = false,
+                    nameResId = R.string.material_req_appointment_record,
+                    descriptionResId = R.string.material_req_appointment_record_desc
                 ),
                 MaterialRequirement(
                     id = "extra_documents",
                     name = "其他补充材料",
                     description = "如有证件损坏、信息变更、未成年人办理等情况，请按窗口要求补充材料。",
-                    required = false
+                    required = false,
+                    nameResId = R.string.material_req_extra_documents,
+                    descriptionResId = R.string.material_req_extra_documents_desc
                 )
             )
         )
@@ -198,11 +259,14 @@ class MaterialViewModel : ViewModel() {
                     code = checklist.code,
                     title = checklist.title,
                     subtitle = checklist.tips.firstOrNull().orEmpty(),
-                    category = "本地 Mock 清单"
+                    category = "本地 Mock 清单",
+                    titleResId = checklist.titleResId,
+                    subtitleResId = checklist.tipResIds.firstOrNull(),
+                    categoryResId = R.string.material_mock_category
                 )
             },
             isLoading = false,
-            errorMessage = null,
+            errorMessageResId = null,
         )
     }
 
@@ -213,8 +277,8 @@ class MaterialViewModel : ViewModel() {
                 selectedChecklist = null,
                 checkedRequirementIds = emptySet(),
                 isLoading = false,
-                errorMessage = "暂时没有找到这个事项的材料清单。",
-                saveMessage = null,
+                errorMessageResId = R.string.material_not_found,
+                saveMessageResId = null,
             )
             return
         }
@@ -224,8 +288,8 @@ class MaterialViewModel : ViewModel() {
             selectedChecklist = checklist,
             checkedRequirementIds = saved?.checkedRequirementIds ?: emptySet(),
             isLoading = false,
-            errorMessage = null,
-            saveMessage = null,
+            errorMessageResId = null,
+            saveMessageResId = null,
         )
     }
 
@@ -233,8 +297,8 @@ class MaterialViewModel : ViewModel() {
         _uiState.value = _uiState.value.copy(
             selectedChecklist = null,
             checkedRequirementIds = emptySet(),
-            saveMessage = null,
-            errorMessage = null,
+            saveMessageResId = null,
+            errorMessageResId = null,
         )
     }
 
@@ -246,7 +310,7 @@ class MaterialViewModel : ViewModel() {
             } else {
                 current + requirementId
             },
-            saveMessage = null,
+            saveMessageResId = null,
         )
     }
 
@@ -256,6 +320,7 @@ class MaterialViewModel : ViewModel() {
         val saved = SavedMaterialChecklist(
             itemCode = checklist.code,
             title = checklist.title,
+            titleResId = checklist.titleResId,
             checkedCount = checkedIds.size,
             totalCount = checklist.requirements.size,
             checkedRequirementIds = checkedIds,
@@ -266,8 +331,8 @@ class MaterialViewModel : ViewModel() {
                 .filterNot { it.itemCode == checklist.code } + saved)
                 .sortedByDescending { it.updatedAtMillis },
             isLoading = false,
-            errorMessage = null,
-            saveMessage = "已保存到我的材料清单",
+            errorMessageResId = null,
+            saveMessageResId = R.string.material_saved_toast,
         )
     }
 }

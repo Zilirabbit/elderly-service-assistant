@@ -1,4 +1,5 @@
 import base64
+import json
 import shutil
 import unittest
 import uuid
@@ -134,6 +135,7 @@ class TtsServiceTest(unittest.IsolatedAsyncioTestCase):
 class FakeQwenService:
     def __init__(self) -> None:
         self.display_rewrite_calls = []
+        self.structured_translation_calls = []
 
     async def rewrite_query(self, original_text: str) -> TextGenerationResult:
         return TextGenerationResult(text="标准检索问题", usage={"tokens": 1}, request_id="query")
@@ -145,10 +147,44 @@ class FakeQwenService:
         self.display_rewrite_calls.append((source_text, target_language))
         return TextGenerationResult(text=source_text, usage={"tokens": 1}, request_id="display")
 
+    async def translate_structured_answer(
+        self,
+        structured_answer: dict,
+        target_language: str,
+    ) -> TextGenerationResult:
+        self.structured_translation_calls.append((structured_answer, target_language))
+        localized = dict(structured_answer)
+        localized["title"] = f"{target_language} localized title"
+        localized["summary"] = f"{target_language} localized summary"
+        localized["detail_text"] = f"{target_language} localized detail"
+        localized["scenario_options"] = [f"{target_language} localized option"]
+        localized["steps"] = [f"{target_language} localized step"]
+        localized["materials"] = {
+            "required": [f"{target_language} localized material"],
+            "optional": [],
+        }
+        localized["warnings"] = [f"{target_language} localized warning"]
+        localized["source_note"] = f"{target_language} localized source note"
+        return TextGenerationResult(
+            text=json.dumps(localized),
+            usage={"tokens": 4},
+            request_id="structured-localization",
+        )
+
 
 class FailingQueryRewriteQwenService(FakeQwenService):
     async def rewrite_query(self, original_text: str) -> TextGenerationResult:
         raise chat_routes.httpx.HTTPError("query rewrite unavailable")
+
+
+class FailingStructuredLocalizationQwenService(FakeQwenService):
+    async def translate_structured_answer(
+        self,
+        structured_answer: dict,
+        target_language: str,
+    ) -> TextGenerationResult:
+        self.structured_translation_calls.append((structured_answer, target_language))
+        raise chat_routes.httpx.HTTPError("structured localization unavailable")
 
 
 class FakeDifyService:
@@ -258,12 +294,81 @@ class ChatPolicyTtsTest(unittest.IsolatedAsyncioTestCase):
             response = await chat_routes.chat_policy(ChatPolicyRequest(message="我想办证"))
 
         self.assertEqual(fake_qwen.display_rewrite_calls, [])
+        self.assertEqual(fake_qwen.structured_translation_calls, [])
         self.assertNotIn("display_rewrite", response.usage)
-        self.assertEqual(response.answer, "建议先确认户籍地或居住地办理要求，再准备材料前往办理。")
+        self.assertEqual(response.usage["display_language"], "zh-CN")
+        self.assertFalse(response.usage["display_localized"])
+        self.assertEqual(response.usage["localization_mode"], "none")
+        self.assertIn('"title"', response.answer)
+        self.assertIn("首次办理港澳通行证", response.answer)
         self.assertEqual(response.display_text, "建议先确认户籍地或居住地办理要求，再准备材料前往办理。")
         self.assertEqual(response.structured_answer.summary, "一般可以办理，请按当地要求准备材料。")
         self.assertEqual(response.structured_answer.materials.required, ["居民身份证"])
         self.assertEqual(response.conversation_id, "conversation-structured")
+
+    async def test_chat_policy_translates_structured_fields_for_non_simplified_languages(self) -> None:
+        for display_language in ("zh-HK", "en"):
+            with self.subTest(display_language=display_language):
+                fake_qwen = FakeQwenService()
+                with (
+                    patch.object(chat_routes, "qwen_text_service", fake_qwen),
+                    patch.object(chat_routes, "dify_service", FakeStructuredDifyService()),
+                    patch.object(chat_routes, "tts_service", FakeTtsService()),
+                ):
+                    response = await chat_routes.chat_policy(
+                        ChatPolicyRequest(message="我想办证", language=display_language)
+                    )
+
+                self.assertEqual(fake_qwen.display_rewrite_calls, [])
+                self.assertEqual(len(fake_qwen.structured_translation_calls), 1)
+                self.assertEqual(fake_qwen.structured_translation_calls[0][1], display_language)
+                self.assertNotIn("display_rewrite", response.usage)
+                self.assertEqual(response.usage["display_language"], display_language)
+                self.assertTrue(response.usage["display_localized"])
+                self.assertEqual(response.usage["localization_mode"], "structured_field_translation")
+                self.assertIn('"title"', response.answer)
+                self.assertIn("首次办理港澳通行证", response.answer)
+                self.assertEqual(response.display_text, f"{display_language} localized detail")
+                self.assertEqual(response.structured_answer.title, f"{display_language} localized title")
+                self.assertEqual(response.structured_answer.steps, [f"{display_language} localized step"])
+                self.assertEqual(response.structured_answer.materials.required, [f"{display_language} localized material"])
+
+    async def test_chat_policy_falls_back_when_structured_localization_fails(self) -> None:
+        fake_qwen = FailingStructuredLocalizationQwenService()
+        fake_dify = FakeStructuredDifyService()
+        with (
+            patch.object(chat_routes, "qwen_text_service", fake_qwen),
+            patch.object(chat_routes, "dify_service", fake_dify),
+            patch.object(chat_routes, "tts_service", FakeTtsService()),
+        ):
+            response = await chat_routes.chat_policy(ChatPolicyRequest(message="我想办证", language="en"))
+
+        self.assertEqual(fake_dify.messages, ["我想办证"])
+        self.assertEqual(len(fake_qwen.structured_translation_calls), 1)
+        self.assertFalse(response.usage["display_localized"])
+        self.assertEqual(response.usage["localization_mode"], "structured_field_translation")
+        self.assertEqual(response.usage["localization_error"], "HTTPError")
+        self.assertEqual(response.structured_answer.title, "首次办理港澳通行证")
+        self.assertEqual(response.display_text, "建议先确认户籍地或居住地办理要求，再准备材料前往办理。")
+
+    async def test_chat_policy_translates_plain_answer_display_text_only(self) -> None:
+        fake_qwen = FakeQwenService()
+        fake_dify = FakeDifyService()
+        with (
+            patch.object(chat_routes, "qwen_text_service", fake_qwen),
+            patch.object(chat_routes, "dify_service", fake_dify),
+            patch.object(chat_routes, "tts_service", FakeTtsService()),
+        ):
+            response = await chat_routes.chat_policy(ChatPolicyRequest(message="我想办证", language="en"))
+
+        self.assertEqual(fake_dify.messages, ["我想办证"])
+        self.assertEqual(fake_qwen.display_rewrite_calls, [("展示文本", "en")])
+        self.assertEqual(fake_qwen.structured_translation_calls, [])
+        self.assertEqual(response.usage["dify_query"], "我想办证")
+        self.assertEqual(response.usage["rewritten_search_query"], "标准检索问题")
+        self.assertTrue(response.usage["display_localized"])
+        self.assertEqual(response.usage["localization_mode"], "plain_answer_translation")
+        self.assertEqual(response.display_text, "展示文本")
 
     async def test_chat_policy_keeps_answer_when_tts_synthesis_fails(self) -> None:
         with (

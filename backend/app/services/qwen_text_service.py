@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass
 from typing import Any
 
@@ -53,6 +54,21 @@ DISPLAY_REWRITE_PROMPT = """你是适老化政务问答语言整理助手。
 """
 
 
+STRUCTURED_LOCALIZATION_PROMPT = """You are a structured answer localizer for a government service assistant.
+
+Task:
+Translate only user-facing string values in the input JSON into the target display language.
+
+Rules:
+1. Output valid JSON only.
+2. Keep all JSON object keys, nesting, array order, booleans, numbers, and null values unchanged.
+3. Do not add, remove, rename, flatten, summarize, or expand any field.
+4. Do not change policy facts, application conditions, material names, route/action/id/url/query fields, or internal identifiers.
+5. For zh-HK, use Traditional Chinese and common Hong Kong wording.
+6. For en, use clear, formal English suitable for government service instructions.
+"""
+
+
 @dataclass
 class TextGenerationResult:
     text: str
@@ -86,6 +102,25 @@ class QwenTextService:
             user_prompt=prompt,
             max_tokens=700,
             temperature=0.25,
+        )
+
+    async def translate_structured_answer(
+        self,
+        structured_answer: dict[str, Any],
+        target_language: str,
+    ) -> TextGenerationResult:
+        display_language = normalize_display_language(target_language)
+        prompt = (
+            f"Target display language:\n{display_language}\n\n"
+            f"Language requirements:\n{display_language_instruction(display_language)}\n\n"
+            "Input JSON:\n"
+            f"{json.dumps(structured_answer, ensure_ascii=False)}"
+        )
+        return await self._chat(
+            system_prompt=STRUCTURED_LOCALIZATION_PROMPT,
+            user_prompt=prompt,
+            max_tokens=1200,
+            temperature=0.1,
         )
 
     async def rewrite_tts_text(

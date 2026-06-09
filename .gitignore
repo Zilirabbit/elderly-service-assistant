@@ -32,8 +32,8 @@ Thumbs.db
 # Demo/runtime outputs
 backend/app/data/exports/*
 !backend/app/data/exports/.gitkeep
+backend/app/data/asr_debug/
 demo-assets/videos/*
 !demo-assets/videos/.gitkeep
 demo-assets/apk/*
 !demo-assets/apk/.gitkeep
-

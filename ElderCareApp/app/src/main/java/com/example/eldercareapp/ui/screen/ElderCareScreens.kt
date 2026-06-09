@@ -11,6 +11,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.OpenableColumns
 import android.widget.Toast
+import androidx.annotation.StringRes
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -108,6 +109,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.eldercareapp.R
 import com.example.eldercareapp.api.ApiClient
 import com.example.eldercareapp.core.i18n.AppLanguageResolver
+import com.example.eldercareapp.data.local.ChatHistoryStorage
+import com.example.eldercareapp.model.ChatHistoryItem
 import com.example.eldercareapp.model.MaterialChecklist
 import com.example.eldercareapp.viewmodel.ChatMessageRole
 import com.example.eldercareapp.model.QaAnswerUiModel
@@ -149,9 +152,13 @@ import com.example.eldercareapp.viewmodel.MaterialViewModel
 import com.example.eldercareapp.viewmodel.SavedMaterialChecklist
 import com.example.eldercareapp.voice.VoiceRecorder
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.example.eldercareapp.BuildConfig
 
 private enum class MainTab {
     Home,
@@ -165,11 +172,14 @@ private enum class OverlayScreen {
     Guide,
     Guidance,
     CrossBorderPreparePicker,
+    ElderCareService,
+    ElderCareInstitutionDetail,
     FontSize,
     MaterialList
 }
 
 private val voiceLanguageOptions = listOf("普通话", "方言", "英语")
+private const val AsrLanguageAuto = "auto"
 private const val SpeechTargetAnswer = "answer"
 private const val SpeechTargetVoiceDraft = "voice_draft"
 private const val SpeechTargetGuide = "guide"
@@ -453,9 +463,11 @@ private data class FontChoice(
 )
 
 private data class PortInfo(
-    val name: String,
+    val id: String,
+    @param:StringRes val nameResId: Int,
     val openTime: String,
-    val waitTime: String,
+    val waitTimeMinutes: Int,
+    @param:StringRes val statusResId: Int,
     val icon: ImageVector
 )
 
@@ -498,8 +510,8 @@ private val fontChoices = listOf(
 )
 
 private val ports = listOf(
-    PortInfo("深圳湾口岸", "6:30 - 24:00", "约 15 分钟", Icons.Filled.Place),
-    PortInfo("福田口岸", "6:30 - 22:30", "约 10 分钟", Icons.Filled.Place)
+    PortInfo("shenzhen_bay", R.string.port_name_shenzhen_bay, "6:30 - 24:00", 15, R.string.port_status_normal, Icons.Filled.Place),
+    PortInfo("futian", R.string.port_name_futian, "6:30 - 22:30", 10, R.string.port_status_normal, Icons.Filled.Place)
 )
 
 private val guidanceQuestions = listOf(
@@ -781,6 +793,7 @@ fun ElderCareAppRoot(modifier: Modifier = Modifier) {
     var overlayScreen by remember { mutableStateOf<OverlayScreen?>(null) }
     var activeChecklistId by remember { mutableStateOf<String?>(null) }
     var checklistBackTarget by remember { mutableStateOf<OverlayScreen?>(null) }
+    var activeElderCareInstitutionId by remember { mutableStateOf("shenzhen_nursing_home") }
     var selectedFont by remember { mutableStateOf(fontChoices[2]) }
     var speechPreference by remember { mutableStateOf(AppLanguageResolver.SpeechLanguagePreference.AUTO) }
     val chatViewModel: ChatViewModel = viewModel()
@@ -791,7 +804,9 @@ fun ElderCareAppRoot(modifier: Modifier = Modifier) {
     val resolvedSpeechLanguage = AppLanguageResolver.resolveSpeechLanguage(speechPreference, displayLanguage)
 
     BackHandler(enabled = overlayScreen != null || currentTab != MainTab.Home) {
-        if (overlayScreen == OverlayScreen.MaterialList && activeChecklistId != null && checklistBackTarget != null) {
+        if (overlayScreen == OverlayScreen.ElderCareInstitutionDetail) {
+            overlayScreen = OverlayScreen.ElderCareService
+        } else if (overlayScreen == OverlayScreen.MaterialList && activeChecklistId != null && checklistBackTarget != null) {
             overlayScreen = checklistBackTarget
             activeChecklistId = null
             checklistBackTarget = null
@@ -822,6 +837,7 @@ fun ElderCareAppRoot(modifier: Modifier = Modifier) {
                 overlayScreen = null
                 activeChecklistId = null
                 checklistBackTarget = null
+                activeElderCareInstitutionId = "shenzhen_nursing_home"
                 materialViewModel.closeChecklist()
             }
             val openMaterialList = {
@@ -911,6 +927,33 @@ fun ElderCareAppRoot(modifier: Modifier = Modifier) {
                         }
                     )
 
+                    OverlayScreen.ElderCareService -> ElderCareServiceScreen(
+                        modifier = rootModifier,
+                        onBack = closeOverlay,
+                        onAskAi = {
+                            overlayScreen = null
+                            activeChecklistId = null
+                            checklistBackTarget = null
+                            currentTab = MainTab.Chat
+                        },
+                        onOpenInstitutionDetail = { institutionId ->
+                            activeElderCareInstitutionId = institutionId
+                            overlayScreen = OverlayScreen.ElderCareInstitutionDetail
+                        }
+                    )
+
+                    OverlayScreen.ElderCareInstitutionDetail -> ElderCareInstitutionDetailScreen(
+                        modifier = rootModifier,
+                        institutionId = activeElderCareInstitutionId,
+                        onBack = { overlayScreen = OverlayScreen.ElderCareService },
+                        onAskAi = {
+                            overlayScreen = null
+                            activeChecklistId = null
+                            checklistBackTarget = null
+                            currentTab = MainTab.Chat
+                        }
+                    )
+
                     OverlayScreen.FontSize -> FontSizeScreen(
                         modifier = rootModifier,
                         selected = selectedFont,
@@ -986,7 +1029,8 @@ fun ElderCareAppRoot(modifier: Modifier = Modifier) {
                         MainTab.Service -> ServiceScreen(
                             modifier = Modifier.padding(innerPadding),
                             onOpenGuidance = { overlayScreen = OverlayScreen.Guidance },
-                            onOpenCrossBorderPreparePicker = openCrossBorderPreparePicker
+                            onOpenCrossBorderPreparePicker = openCrossBorderPreparePicker,
+                            onOpenElderCareService = { overlayScreen = OverlayScreen.ElderCareService }
                         )
 
                         MainTab.My -> MyScreen(
@@ -1016,9 +1060,9 @@ private fun HomeScreen(
 ) {
     val context = LocalContext.current
     val responsive = LocalElderResponsive.current
-    var region by remember { mutableStateOf("香港") }
-    var direction by remember { mutableStateOf("去往港澳") }
-    var faqCategory by remember { mutableStateOf("全部") }
+    var region by remember { mutableStateOf("hong_kong") }
+    var direction by remember { mutableStateOf("to_hk_macao") }
+    var faqCategory by remember { mutableStateOf(FaqCategoryAll) }
     var showVoiceSheet by remember { mutableStateOf(false) }
     val voiceOptions = listOf(
         AppLanguageResolver.SpeechLanguagePreference.AUTO,
@@ -1098,7 +1142,6 @@ private fun HomeScreen(
         topBar = {
             UnifiedTopBar(
                 title = stringResource(R.string.app_name),
-                subtitle = stringResource(R.string.app_subtitle),
                 gradient = true,
                 actions = listOf(
                     TopBarAction(
@@ -1231,15 +1274,29 @@ private fun HomeScreen(
         }
 
         if (!responsive.isExtraLargeText) {
-            SegmentedControl(
-                options = listOf("香港", "澳门", "全部"),
-                selected = region,
-                onSelected = { region = it }
+            val regionOptions = listOf(
+                "hong_kong" to stringResource(R.string.home_filter_hong_kong),
+                "macao" to stringResource(R.string.home_filter_macao),
+                "all" to stringResource(R.string.home_filter_all)
+            )
+            val directionOptions = listOf(
+                "to_hk_macao" to stringResource(R.string.home_direction_to_hk_macao),
+                "return_mainland" to stringResource(R.string.home_direction_return_mainland),
+                "all" to stringResource(R.string.home_filter_all)
             )
             SegmentedControl(
-                options = listOf("去往港澳", "返回内地", "全部"),
-                selected = direction,
-                onSelected = { direction = it }
+                options = regionOptions.map { it.second },
+                selected = regionOptions.firstOrNull { it.first == region }?.second ?: regionOptions.first().second,
+                onSelected = { selected ->
+                    region = regionOptions.firstOrNull { it.second == selected }?.first ?: region
+                }
+            )
+            SegmentedControl(
+                options = directionOptions.map { it.second },
+                selected = directionOptions.firstOrNull { it.first == direction }?.second ?: directionOptions.first().second,
+                onSelected = { selected ->
+                    direction = directionOptions.firstOrNull { it.second == selected }?.first ?: direction
+                }
             )
         }
 
@@ -1270,6 +1327,7 @@ private fun HomeScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ChatScreen(
     chatViewModel: ChatViewModel,
@@ -1286,11 +1344,19 @@ private fun ChatScreen(
     val uiStrings = chatUiStrings()
     val voiceRecorder = remember { VoiceRecorder() }
     var showVoicePanel by remember { mutableStateOf(false) }
+    var showHistorySheet by remember { mutableStateOf(false) }
     var selectedVoiceLanguage by remember { mutableStateOf("普通话") }
     var isRecording by remember { mutableStateOf(false) }
     var voicePanelMessage by remember { mutableStateOf<String?>(null) }
     val chatScrollState = rememberScrollState()
     val speech = rememberCloudSpeechController(chatViewModel, speechLanguage)
+    val historyStorage = remember(context.applicationContext) {
+        ChatHistoryStorage(context.applicationContext)
+    }
+
+    LaunchedEffect(historyStorage) {
+        chatViewModel.attachHistoryStorage(historyStorage)
+    }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -1311,7 +1377,7 @@ private fun ChatScreen(
                 } else {
                     chatViewModel.transcribeVoice(
                         file,
-                        voiceLanguageCode(selectedVoiceLanguage),
+                        AsrLanguageAuto,
                         context.getString(R.string.voice_sample_live_recording),
                         uiStrings
                     )
@@ -1354,7 +1420,7 @@ private fun ChatScreen(
         showVoicePanel = false
         chatViewModel.transcribeVoice(
             file = sampleFile,
-            language = voiceLanguageCode(selectedVoiceLanguage),
+            language = AsrLanguageAuto,
             sampleName = getDisplayNameForUri(context, uri),
             uiStrings = uiStrings
         )
@@ -1396,7 +1462,7 @@ private fun ChatScreen(
         }
         chatViewModel.transcribeVoice(
             file,
-            voiceLanguageCode(selectedVoiceLanguage),
+            AsrLanguageAuto,
             context.getString(R.string.voice_sample_live_recording),
             uiStrings
         )
@@ -1416,6 +1482,34 @@ private fun ChatScreen(
             .widthIn(max = responsive.chatContentMaxWidth)
     }
 
+    if (showHistorySheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showHistorySheet = false },
+            containerColor = ElderBackground
+        ) {
+            ChatHistorySheet(
+                items = uiState.historyItems,
+                onRestore = { itemId ->
+                    speech.stop()
+                    chatViewModel.restoreHistory(itemId)
+                    showHistorySheet = false
+                },
+                onResend = { itemId ->
+                    speech.stop()
+                    chatViewModel.resendHistoryQuestion(
+                        itemId = itemId,
+                        displayLanguage = displayLanguage,
+                        speechLanguage = speechLanguage,
+                        uiStrings = uiStrings
+                    )
+                    showHistorySheet = false
+                },
+                onDelete = chatViewModel::deleteHistory,
+                onClearAll = chatViewModel::clearHistory
+            )
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -1426,7 +1520,7 @@ private fun ChatScreen(
             elevated = true,
             actions = listOf(
                 TopBarAction(stringResource(R.string.common_history), Icons.Filled.DateRange) {
-                    Toast.makeText(context, context.getString(R.string.chat_history_toast), Toast.LENGTH_SHORT).show()
+                    showHistorySheet = true
                 },
                 TopBarAction(stringResource(R.string.common_font), Icons.Filled.Settings, onClick = onOpenFontSize)
             )
@@ -1460,7 +1554,7 @@ private fun ChatScreen(
                     start = responsive.pagePadding,
                     end = responsive.pagePadding,
                     top = responsive.pagePadding,
-                    bottom = responsive.pagePadding + 112.dp
+                    bottom = responsive.pagePadding + 160.dp
                 ),
             verticalArrangement = Arrangement.spacedBy(responsive.pageSpacing)
         ) {
@@ -1544,7 +1638,7 @@ private fun ChatScreen(
                 QaLoadingCard(text = voicePanelMessage ?: stringResource(R.string.chat_transcribing))
             }
 
-            if (uiState.lastVoiceSampleName.isNotBlank()) {
+            if (BuildConfig.DEBUG && uiState.lastVoiceSampleName.isNotBlank()) {
                 VoiceSampleInfoCard(
                     name = uiState.lastVoiceSampleName,
                     sizeBytes = uiState.lastVoiceSampleSizeBytes
@@ -1612,7 +1706,7 @@ private fun ChatScreen(
                     onRetry = {
                         speech.stop()
                         chatViewModel.clearVoiceDraft()
-                        if (isSampleDraft) {
+                        if (isSampleDraft && BuildConfig.DEBUG) {
                             audioSampleLauncher.launch("audio/*")
                         } else {
                             showVoicePanel = true
@@ -1643,7 +1737,8 @@ private fun ChatScreen(
                     onStartRecording = { startRecording() },
                     onPickSample = { audioSampleLauncher.launch("audio/*") },
                     onStopRecording = { stopRecordingAndUpload() },
-                    onCancel = { stopRecording() }
+                    onCancel = { stopRecording() },
+                    showDebugControls = BuildConfig.DEBUG
                 )
             }
         }
@@ -1670,27 +1765,29 @@ private fun ChatScreen(
 private fun ServiceScreen(
     onOpenGuidance: () -> Unit,
     onOpenCrossBorderPreparePicker: () -> Unit,
+    onOpenElderCareService: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val responsive = LocalElderResponsive.current
     val toast = {
-        Toast.makeText(context, "该功能暂未开放", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, context.getString(R.string.service_unavailable_toast), Toast.LENGTH_SHORT).show()
     }
     val travelServices = listOf(
-        ServiceItem("过关材料准备", "按当前情况选择材料清单", Icons.Filled.List, onOpenCrossBorderPreparePicker),
-        ServiceItem("通关流程", "查看过关步骤", Icons.Filled.List),
-        ServiceItem("预约停车", "提前安排停车", Icons.Filled.Place),
-        ServiceItem("交通出行", "查询接驳与路线", Icons.Filled.Home),
-        ServiceItem("特殊人群预约", "老人等关怀服务", Icons.Filled.Favorite),
-        ServiceItem("志愿者呼叫", "一键寻求协助", Icons.Filled.Star),
-        ServiceItem("客服电话", "快速联系人工", Icons.Filled.Call),
-        ServiceItem("视频通关", "视频了解流程", Icons.Filled.PlayArrow)
+        ServiceItem("material_prepare", R.string.service_material_prepare_title, R.string.service_material_prepare_desc, Icons.Filled.List, onOpenCrossBorderPreparePicker),
+        ServiceItem("border_flow", R.string.service_border_flow_title, R.string.service_border_flow_desc, Icons.Filled.List),
+        ServiceItem("parking", R.string.service_parking_title, R.string.service_parking_desc, Icons.Filled.Place),
+        ServiceItem("transport", R.string.service_transport_title, R.string.service_transport_desc, Icons.Filled.Home),
+        ServiceItem("elder_care_service", R.string.service_elder_care_title, R.string.service_elder_care_desc, Icons.Filled.Favorite, onOpenElderCareService),
+        ServiceItem("special_care", R.string.service_special_care_title, R.string.service_special_care_desc, Icons.Filled.Favorite),
+        ServiceItem("volunteer_call", R.string.service_volunteer_call_title, R.string.service_volunteer_call_desc, Icons.Filled.Star),
+        ServiceItem("service_phone", R.string.service_phone_title, R.string.service_phone_desc, Icons.Filled.Call),
+        ServiceItem("video_border", R.string.service_video_border_title, R.string.service_video_border_desc, Icons.Filled.PlayArrow)
     )
     val otherServices = listOf(
-        ServiceItem("养老资源", "周边养老服务", Icons.Filled.Person),
-        ServiceItem("医疗资源", "医院与便民医疗", Icons.Filled.Favorite),
-        ServiceItem("旅游资源", "湾区出行与游玩", Icons.Filled.Place)
+        ServiceItem("elder_resource", R.string.service_elder_resource_title, R.string.service_elder_resource_desc, Icons.Filled.Person),
+        ServiceItem("medical_resource", R.string.service_medical_resource_title, R.string.service_medical_resource_desc, Icons.Filled.Favorite),
+        ServiceItem("travel_resource", R.string.service_travel_resource_title, R.string.service_travel_resource_desc, Icons.Filled.Place)
     )
 
     ScreenColumn(
@@ -1734,6 +1831,419 @@ private fun ServiceScreen(
     }
 }
 
+private data class ElderCareServiceType(
+    val id: String,
+    @param:StringRes val titleResId: Int,
+    @param:StringRes val subtitleResId: Int,
+    val icon: ImageVector,
+    val tint: Color,
+    val background: Color
+)
+
+private data class ElderCareInstitution(
+    val id: String,
+    @param:StringRes val nameResId: Int,
+    val tagResIds: List<Int>,
+    @param:StringRes val sourceResId: Int,
+    @param:StringRes val suitableForResId: Int,
+    @param:StringRes val serviceContentResId: Int,
+    val icon: ImageVector
+)
+
+private fun elderCareServiceTypes() = listOf(
+    ElderCareServiceType(
+        id = "nursing_home",
+        titleResId = R.string.elder_care_type_nursing_home,
+        subtitleResId = R.string.elder_care_type_nursing_home_desc,
+        icon = Icons.Filled.Home,
+        tint = ElderOrange,
+        background = ElderOrangeSoft
+    ),
+    ElderCareServiceType(
+        id = "day_care",
+        titleResId = R.string.elder_care_type_day_care,
+        subtitleResId = R.string.elder_care_type_day_care_desc,
+        icon = Icons.Filled.DateRange,
+        tint = ElderGreen,
+        background = ElderGreenSoft
+    ),
+    ElderCareServiceType(
+        id = "meal",
+        titleResId = R.string.elder_care_type_meal,
+        subtitleResId = R.string.elder_care_type_meal_desc,
+        icon = Icons.Filled.Favorite,
+        tint = ElderOrange,
+        background = Color(0xFFFFF7E8)
+    ),
+    ElderCareServiceType(
+        id = "subsidy",
+        titleResId = R.string.elder_care_type_subsidy,
+        subtitleResId = R.string.elder_care_type_subsidy_desc,
+        icon = Icons.Filled.List,
+        tint = ElderBlue,
+        background = ElderBlueSoft
+    )
+)
+
+private fun elderCareInstitutions() = listOf(
+    ElderCareInstitution(
+        id = "shenzhen_nursing_home",
+        nameResId = R.string.elder_care_institution_shenzhen_nursing_home,
+        tagResIds = listOf(R.string.elder_care_tag_public, R.string.elder_care_tag_nursing_beds),
+        sourceResId = R.string.elder_care_source_public_info,
+        suitableForResId = R.string.elder_care_suitable_for_shenzhen_nursing_home,
+        serviceContentResId = R.string.elder_care_service_content_shenzhen_nursing_home,
+        icon = Icons.Filled.Home
+    ),
+    ElderCareInstitution(
+        id = "nanshan_care_center",
+        nameResId = R.string.elder_care_institution_nanshan_care_center,
+        tagResIds = listOf(R.string.elder_care_tag_community, R.string.elder_care_tag_day_care),
+        sourceResId = R.string.elder_care_source_public_info,
+        suitableForResId = R.string.elder_care_suitable_for_nanshan_care_center,
+        serviceContentResId = R.string.elder_care_service_content_nanshan_care_center,
+        icon = Icons.Filled.DateRange
+    )
+)
+
+@Composable
+private fun ElderCareServiceScreen(
+    onBack: () -> Unit,
+    onAskAi: () -> Unit,
+    onOpenInstitutionDetail: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val responsive = LocalElderResponsive.current
+    val serviceTypes = elderCareServiceTypes()
+    val institutions = elderCareInstitutions()
+    val showFeatureToast = { title: String ->
+        Toast.makeText(context, "$title ${context.getString(R.string.elder_care_feature_coming_soon)}", Toast.LENGTH_SHORT).show()
+    }
+    val showMapToast = {
+        Toast.makeText(context, context.getString(R.string.elder_care_map_coming_soon), Toast.LENGTH_SHORT).show()
+    }
+
+    ScreenColumn(
+        modifier = modifier.safeDrawingPadding(),
+        topBar = {
+            UnifiedTopBar(
+                title = stringResource(R.string.elder_care_page_title),
+                subtitle = stringResource(R.string.elder_care_page_subtitle),
+                showBack = true,
+                leadingIcon = Icons.Filled.ArrowBack,
+                onBack = onBack,
+                elevated = true
+            )
+        }
+    ) {
+        SectionTitle(text = stringResource(R.string.elder_care_service_type_section))
+        serviceTypes.forEach { item ->
+            ElderCareServiceTypeCard(
+                item = item,
+                onClick = { showFeatureToast(context.getString(item.titleResId)) }
+            )
+        }
+
+        SectionTitle(text = stringResource(R.string.elder_care_featured_section))
+        institutions.forEach { institution ->
+            ElderCareInstitutionCard(
+                institution = institution,
+                onOpenDetail = { onOpenInstitutionDetail(institution.id) },
+                onMap = showMapToast
+            )
+        }
+
+        SoftCard(containerColor = ElderBlueSoft, borderColor = Color(0xFFBFD8FF), elevation = 0.dp) {
+            Row(
+                modifier = Modifier.padding(responsive.cardPadding),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)
+            ) {
+                IconBadge(icon = Icons.Filled.Email, tint = ElderBlue, background = Color.White, size = responsive.iconLarge)
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)) {
+                    Text(
+                        text = stringResource(R.string.elder_care_ai_title),
+                        color = ElderText,
+                        fontSize = responsive.cardTitle,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = stringResource(R.string.elder_care_ai_desc),
+                        color = ElderTextMuted,
+                        fontSize = responsive.body
+                    )
+                }
+                SecondaryMiniButton(text = stringResource(R.string.elder_care_go_qa), onClick = onAskAi)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ElderCareServiceTypeCard(
+    item: ElderCareServiceType,
+    onClick: () -> Unit
+) {
+    val responsive = LocalElderResponsive.current
+    SoftCard(modifier = Modifier.clickable(onClick = onClick)) {
+        Row(
+            modifier = Modifier.padding(responsive.cardPadding),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)
+        ) {
+            IconBadge(icon = item.icon, tint = item.tint, background = item.background, size = responsive.iconLarge)
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)) {
+                Text(
+                    text = stringResource(item.titleResId),
+                    color = ElderText,
+                    fontSize = responsive.cardTitle,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = stringResource(item.subtitleResId),
+                    color = ElderTextMuted,
+                    fontSize = responsive.body
+                )
+            }
+            Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = ElderTextMuted, modifier = Modifier.size(responsive.iconSmall))
+        }
+    }
+}
+
+@Composable
+private fun ElderCareInstitutionCard(
+    institution: ElderCareInstitution,
+    onOpenDetail: () -> Unit,
+    onMap: () -> Unit
+) {
+    val responsive = LocalElderResponsive.current
+    SoftCard {
+        Column(
+            modifier = Modifier.padding(responsive.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(responsive.cardSpacing)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)
+            ) {
+                IconBadge(icon = institution.icon, tint = ElderBlue, background = ElderBlueSoft, size = responsive.iconLarge)
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)) {
+                    Text(
+                        text = stringResource(institution.nameResId),
+                        color = ElderText,
+                        fontSize = responsive.cardTitle,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(responsive.smallSpacing),
+                        modifier = Modifier.horizontalScroll(rememberScrollState())
+                    ) {
+                        institution.tagResIds.forEach { tagResId ->
+                            StatusPill(text = stringResource(tagResId), color = ElderBlue, background = ElderBlueSoft)
+                        }
+                    }
+                    Text(
+                        text = stringResource(institution.sourceResId),
+                        color = ElderTextMuted,
+                        fontSize = responsive.label
+                    )
+                }
+            }
+            AdaptivePairRow(
+                first = { itemModifier ->
+                    SecondaryActionButton(
+                        text = stringResource(R.string.elder_care_view_detail),
+                        icon = Icons.Filled.Info,
+                        onClick = onOpenDetail,
+                        modifier = itemModifier,
+                        height = 52.dp
+                    )
+                },
+                second = { itemModifier ->
+                    SecondaryActionButton(
+                        text = stringResource(R.string.elder_care_map_navigation),
+                        icon = Icons.Filled.Place,
+                        onClick = onMap,
+                        modifier = itemModifier,
+                        height = 52.dp
+                    )
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ElderCareInstitutionDetailScreen(
+    institutionId: String,
+    onBack: () -> Unit,
+    onAskAi: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val responsive = LocalElderResponsive.current
+    val institution = elderCareInstitutions().firstOrNull { it.id == institutionId } ?: elderCareInstitutions().first()
+    val showSourceToast = {
+        Toast.makeText(context, context.getString(R.string.elder_care_source_coming_soon), Toast.LENGTH_SHORT).show()
+    }
+    val showMapToast = {
+        Toast.makeText(context, context.getString(R.string.elder_care_map_coming_soon), Toast.LENGTH_SHORT).show()
+    }
+    val showFeatureToast = {
+        Toast.makeText(context, context.getString(R.string.elder_care_feature_coming_soon), Toast.LENGTH_SHORT).show()
+    }
+    val questionResIds = listOf(
+        R.string.elder_care_question_fee,
+        R.string.elder_care_question_visit,
+        R.string.elder_care_question_materials
+    )
+
+    ScreenColumn(
+        modifier = modifier.safeDrawingPadding(),
+        topBar = {
+            UnifiedTopBar(
+                title = stringResource(R.string.elder_care_detail_title),
+                showBack = true,
+                leadingIcon = Icons.Filled.ArrowBack,
+                onBack = onBack,
+                elevated = true
+            )
+        }
+    ) {
+        SoftCard {
+            Column(
+                modifier = Modifier.padding(responsive.cardPadding),
+                verticalArrangement = Arrangement.spacedBy(responsive.cardSpacing)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)
+                ) {
+                    IconBadge(icon = institution.icon, tint = ElderBlue, background = ElderBlueSoft, size = responsive.iconLarge)
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)) {
+                        Text(
+                            text = stringResource(institution.nameResId),
+                            color = ElderText,
+                            fontSize = responsive.sectionTitle,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(responsive.smallSpacing),
+                            modifier = Modifier.horizontalScroll(rememberScrollState())
+                        ) {
+                            institution.tagResIds.forEach { tagResId ->
+                                StatusPill(text = stringResource(tagResId), color = ElderBlue, background = ElderBlueSoft)
+                            }
+                        }
+                    }
+                }
+
+                ElderCareInfoTextLine(
+                    label = stringResource(R.string.elder_care_suitable_for_label),
+                    value = stringResource(institution.suitableForResId)
+                )
+                ElderCareInfoTextLine(
+                    label = stringResource(R.string.elder_care_service_content_label),
+                    value = stringResource(institution.serviceContentResId)
+                )
+                ElderCareInfoTextLine(
+                    label = stringResource(R.string.elder_care_info_source_label),
+                    value = stringResource(R.string.elder_care_source_public_info_value)
+                )
+                ElderCareReferenceRow(onViewSource = showSourceToast, onMap = showMapToast)
+            }
+        }
+
+        SoftCard {
+            Column(
+                modifier = Modifier.padding(responsive.cardPadding),
+                verticalArrangement = Arrangement.spacedBy(responsive.cardSpacing)
+            ) {
+                SectionTitle(text = stringResource(R.string.elder_care_questions_section))
+                questionResIds.forEach { questionResId ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = showFeatureToast)
+                            .padding(vertical = responsive.smallSpacing),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)
+                    ) {
+                        IconBadge(icon = Icons.Filled.List, tint = ElderBlue, background = ElderBlueSoft, size = responsive.iconSmall + 12.dp)
+                        Text(
+                            text = stringResource(questionResId),
+                            color = ElderText,
+                            fontSize = responsive.bodyLarge,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = ElderTextMuted, modifier = Modifier.size(responsive.iconSmall))
+                    }
+                }
+            }
+        }
+
+        SoftCard(containerColor = ElderBlueSoft, borderColor = Color(0xFFBFD8FF), elevation = 0.dp) {
+            Row(
+                modifier = Modifier.padding(responsive.cardPadding),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)
+            ) {
+                IconBadge(icon = Icons.Filled.Email, tint = ElderBlue, background = Color.White, size = responsive.iconLarge)
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)) {
+                    Text(
+                        text = stringResource(R.string.elder_care_unsure_title),
+                        color = ElderText,
+                        fontSize = responsive.cardTitle,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = stringResource(R.string.elder_care_unsure_desc),
+                        color = ElderTextMuted,
+                        fontSize = responsive.body
+                    )
+                }
+                SecondaryMiniButton(text = stringResource(R.string.elder_care_ask_ai), onClick = onAskAi)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ElderCareInfoTextLine(label: String, value: String) {
+    val responsive = LocalElderResponsive.current
+    Text(
+        text = "$label$value",
+        color = ElderTextMuted,
+        fontSize = responsive.body
+    )
+}
+
+@Composable
+private fun ElderCareReferenceRow(
+    onViewSource: () -> Unit,
+    onMap: () -> Unit
+) {
+    val responsive = LocalElderResponsive.current
+    Column(verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)) {
+        Text(
+            text = stringResource(R.string.elder_care_reference_method_label),
+            color = ElderText,
+            fontSize = responsive.body,
+            fontWeight = FontWeight.Bold
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)) {
+            SecondaryMiniButton(text = stringResource(R.string.elder_care_view_source), onClick = onViewSource)
+            SecondaryMiniButton(text = stringResource(R.string.elder_care_map_navigation), onClick = onMap)
+        }
+    }
+}
+
 @Composable
 private fun CrossBorderPreparePickerScreen(
     onBack: () -> Unit,
@@ -1744,26 +2254,30 @@ private fun CrossBorderPreparePickerScreen(
     val responsive = LocalElderResponsive.current
     val choices = listOf(
         ServiceItem(
-            title = "已办好证件，只核对过关材料",
-            subtitle = "查看通行证、签注、身份证等是否带齐。",
+            id = "ready",
+            titleResId = R.string.materials_scenario_ready_title,
+            subtitleResId = R.string.materials_scenario_ready_desc,
             icon = Icons.Filled.Check,
             onClick = { onOpenChecklist("border_crossing_prepare") }
         ),
         ServiceItem(
-            title = "还没有港澳通行证",
-            subtitle = "查看首次办理港澳通行证需要准备的材料。",
+            id = "no_permit",
+            titleResId = R.string.materials_scenario_no_permit_title,
+            subtitleResId = R.string.materials_scenario_no_permit_desc,
             icon = Icons.Filled.AccountCircle,
             onClick = { onOpenChecklist("hk_macau_pass_apply") }
         ),
         ServiceItem(
-            title = "有通行证，但签注不确定",
-            subtitle = "查看续签或签注核对材料。",
+            id = "uncertain_endorsement",
+            titleResId = R.string.materials_scenario_uncertain_endorsement_title,
+            subtitleResId = R.string.materials_scenario_uncertain_endorsement_desc,
             icon = Icons.Filled.Refresh,
             onClick = { onOpenChecklist("hk_macau_renewal") }
         ),
         ServiceItem(
-            title = "我不清楚该办哪种",
-            subtitle = "回答几个问题，先判断自己该办哪一种。",
+            id = "unknown",
+            titleResId = R.string.materials_scenario_unknown_title,
+            subtitleResId = R.string.materials_scenario_unknown_desc,
             icon = Icons.Filled.Search,
             onClick = onOpenGuidance
         )
@@ -1773,7 +2287,7 @@ private fun CrossBorderPreparePickerScreen(
         modifier = modifier.safeDrawingPadding(),
         topBar = {
             UnifiedTopBar(
-                title = "过关材料准备",
+                title = stringResource(R.string.materials_prepare_title),
                 showBack = true,
                 leadingIcon = Icons.Filled.ArrowBack,
                 onBack = onBack,
@@ -1790,13 +2304,13 @@ private fun CrossBorderPreparePickerScreen(
                 IconBadge(icon = Icons.Filled.List, size = responsive.iconMedium)
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)) {
                     Text(
-                        text = "请选择您现在的情况",
+                        text = stringResource(R.string.materials_choose_current_status),
                         color = ElderText,
                         fontSize = responsive.cardTitle,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "我会帮您打开对应的材料清单。不确定时，可以先选择“我不清楚该办哪种”。",
+                        text = stringResource(R.string.materials_choose_current_status_desc),
                         color = ElderTextMuted,
                         fontSize = responsive.body
                     )
@@ -1806,8 +2320,8 @@ private fun CrossBorderPreparePickerScreen(
 
         choices.forEach { choice ->
             ActionCard(
-                title = choice.title,
-                subtitle = choice.subtitle,
+                title = stringResource(choice.titleResId),
+                subtitle = stringResource(choice.subtitleResId),
                 icon = choice.icon,
                 onClick = choice.onClick ?: {},
                 layoutMode = CardLayoutMode.List
@@ -2096,7 +2610,7 @@ private fun GuidanceResultCard(
             GuidanceNoticeBlock(text = result.notice)
 
             PrimaryActionButton(
-                text = "查看详细政策",
+                text = stringResource(R.string.guidance_view_policy),
                 icon = Icons.Filled.Search,
                 onClick = onOpenDetailedPolicy,
                 height = 58.dp
@@ -2104,7 +2618,7 @@ private fun GuidanceResultCard(
             AdaptivePairRow(
                 first = { itemModifier ->
                     SecondaryActionButton(
-                        text = "重新判断",
+                        text = stringResource(R.string.guidance_restart),
                         icon = Icons.Filled.Refresh,
                         onClick = onRestart,
                         modifier = itemModifier,
@@ -2113,7 +2627,7 @@ private fun GuidanceResultCard(
                 },
                 second = { itemModifier ->
                     SecondaryActionButton(
-                        text = "查看材料清单",
+                        text = stringResource(R.string.qa_open_materials),
                         icon = Icons.Filled.List,
                         onClick = onOpenMaterialList,
                         modifier = itemModifier,
@@ -2182,7 +2696,7 @@ private fun MyScreen(
 
     ScreenColumn(
         modifier = modifier,
-        topBar = { UnifiedTopBar(title = "我的", gradient = true) }
+        topBar = { UnifiedTopBar(title = stringResource(R.string.nav_my), gradient = true) }
     ) {
         SoftCard {
             Row(
@@ -2193,14 +2707,14 @@ private fun MyScreen(
                 IconBadge(icon = Icons.Filled.AccountCircle, size = responsive.iconLarge)
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "您好，欢迎使用粤同心",
+                        text = stringResource(R.string.my_welcome_title),
                         color = ElderText,
                         fontSize = responsive.cardTitle,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(responsive.smallSpacing))
                     Text(
-                        text = "为您保存材料清单和办事草稿",
+                        text = stringResource(R.string.my_welcome_desc),
                         color = ElderTextMuted,
                         fontSize = responsive.body
                     )
@@ -2225,25 +2739,27 @@ private fun PortDetailScreen(
     val context = LocalContext.current
     val responsive = LocalElderResponsive.current
     val relatedServices = listOf(
-        ServiceItem("问 AI", "询问通关问题", Icons.Filled.Email, onAskAi),
-        ServiceItem("查看材料", "核对必备证件", Icons.Filled.List, onOpenMaterialList),
+        ServiceItem("ask_ai", R.string.port_related_ask_ai_title, R.string.port_related_ask_ai_desc, Icons.Filled.Email, onAskAi),
+        ServiceItem("view_materials", R.string.port_related_materials_title, R.string.port_related_materials_desc, Icons.Filled.List, onOpenMaterialList),
         ServiceItem(
-            "导航",
-            "查看路线",
+            "navigation",
+            R.string.port_related_navigation_title,
+            R.string.port_related_navigation_desc,
             Icons.Filled.Place
-        ) { Toast.makeText(context, "导航功能暂未开放", Toast.LENGTH_SHORT).show() },
+        ) { Toast.makeText(context, context.getString(R.string.port_navigation_unavailable_toast), Toast.LENGTH_SHORT).show() },
         ServiceItem(
-            "找家人帮忙",
-            "请家属协助",
+            "family_help",
+            R.string.port_related_family_help_title,
+            R.string.port_related_family_help_desc,
             Icons.Filled.Person
-        ) { Toast.makeText(context, "家属协助暂未开放", Toast.LENGTH_SHORT).show() }
+        ) { Toast.makeText(context, context.getString(R.string.port_family_help_unavailable_toast), Toast.LENGTH_SHORT).show() }
     )
 
     ScreenColumn(
         modifier = modifier.safeDrawingPadding(),
         topBar = {
             UnifiedTopBar(
-                title = "口岸详情",
+                title = stringResource(R.string.port_detail_title),
                 showBack = true,
                 leadingIcon = Icons.Filled.ArrowBack,
                 onBack = onBack,
@@ -2264,7 +2780,7 @@ private fun PortDetailScreen(
                             horizontalArrangement = Arrangement.spacedBy(responsive.smallSpacing)
                         ) {
                             Text(
-                                text = "深圳湾口岸",
+                                text = stringResource(R.string.port_name_shenzhen_bay),
                                 color = ElderText,
                                 fontSize = responsive.sectionTitle,
                                 fontWeight = FontWeight.Bold,
@@ -2272,44 +2788,44 @@ private fun PortDetailScreen(
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f)
                             )
-                            StatusPill(text = "正常", color = ElderGreen, background = ElderGreenSoft)
+                            StatusPill(text = stringResource(R.string.port_status_normal), color = ElderGreen, background = ElderGreenSoft)
                         }
                         Text(
-                            text = "演示数据，仅供办事前参考",
+                            text = stringResource(R.string.port_demo_notice),
                             color = ElderTextMuted,
                             fontSize = responsive.label
                         )
                     }
                 }
-                InfoRow("开放时间", "6:30 - 24:00", Icons.Filled.DateRange)
-                InfoRow("预计等待", "约 15 分钟", Icons.Filled.Person, valueColor = ElderGreen)
-                InfoRow("更新时间", "今天 09:30", Icons.Filled.Refresh)
+                InfoRow(stringResource(R.string.port_open_time_label), "6:30 - 24:00", Icons.Filled.DateRange)
+                InfoRow(stringResource(R.string.port_wait_time_label), stringResource(R.string.port_wait_about_minutes, 15), Icons.Filled.Person, valueColor = ElderGreen)
+                InfoRow(stringResource(R.string.port_updated_time_label), stringResource(R.string.port_updated_time_demo), Icons.Filled.Refresh)
             }
         }
 
         SoftCard(containerColor = ElderOrangeSoft, borderColor = Color(0xFFFFCC8F)) {
             Column(modifier = Modifier.padding(responsive.cardPadding), verticalArrangement = Arrangement.spacedBy(responsive.cardSpacing)) {
-                SectionTitle(text = "重要提醒", icon = Icons.Filled.Warning)
-                ReminderRow("请确认港澳通行证和有效签注")
-                ReminderRow("建议提前准备身份证件")
-                ReminderRow("高峰时段可能排队，请预留时间")
+                SectionTitle(text = stringResource(R.string.port_important_notice), icon = Icons.Filled.Warning)
+                ReminderRow(stringResource(R.string.port_reminder_pass_endorsement))
+                ReminderRow(stringResource(R.string.port_reminder_id_card))
+                ReminderRow(stringResource(R.string.port_reminder_peak_time))
             }
         }
 
         SoftCard {
             Column(modifier = Modifier.padding(responsive.cardPadding), verticalArrangement = Arrangement.spacedBy(responsive.cardSpacing)) {
-                SectionTitle(text = "过关步骤")
-                TimelineRow(1, "到达口岸")
-                TimelineRow(2, "准备证件")
-                TimelineRow(3, "通过边检")
-                TimelineRow(4, "前往香港侧交通接驳")
+                SectionTitle(text = stringResource(R.string.port_border_steps))
+                TimelineRow(1, stringResource(R.string.port_step_arrive))
+                TimelineRow(2, stringResource(R.string.port_step_prepare_documents))
+                TimelineRow(3, stringResource(R.string.port_step_border_inspection))
+                TimelineRow(4, stringResource(R.string.port_step_hk_transport))
             }
         }
 
-        SectionTitle(text = "相关服务")
+        SectionTitle(text = stringResource(R.string.port_related_services))
         ServiceGrid(items = relatedServices, onClick = {})
 
-        NoticeCard(text = "状态为演示数据，请以现场公告为准。")
+        NoticeCard(text = stringResource(R.string.port_status_demo_notice))
     }
 }
 
@@ -2533,9 +3049,9 @@ private fun MaterialListScreen(
             LoadingCard(text = stringResource(R.string.common_loading_materials))
         }
 
-        uiState.errorMessage?.takeIf { it.isNotBlank() }?.let { message ->
+        uiState.errorMessageResId?.let { messageResId ->
             MaterialErrorCard(
-                message = message,
+                message = stringResource(messageResId),
                 onRetry = { materialViewModel.loadItems() }
             )
         }
@@ -2543,8 +3059,8 @@ private fun MaterialListScreen(
         SectionTitle(text = stringResource(R.string.material_choose_item))
         uiState.items.forEach { item ->
             ActionCard(
-                title = item.title,
-                subtitle = item.subtitle,
+                title = item.titleResId?.let { stringResource(it) } ?: item.title,
+                subtitle = item.subtitleResId?.let { stringResource(it) } ?: item.subtitle,
                 icon = when (item.code) {
                     "hk_macau_pass_apply" -> Icons.Filled.AccountCircle
                     "hk_macau_renewal" -> Icons.Filled.Refresh
@@ -2585,7 +3101,9 @@ private fun MaterialChecklistScreen(
         containerColor = ElderBackground,
         topBar = {
             UnifiedTopBar(
-                title = currentChecklist?.title ?: stringResource(R.string.common_material_list),
+                title = currentChecklist?.titleResId?.let { stringResource(it) }
+                    ?: currentChecklist?.title
+                    ?: stringResource(R.string.common_material_list),
                 showBack = true,
                 leadingIcon = Icons.Filled.ArrowBack,
                 onBack = onBack,
@@ -2637,15 +3155,18 @@ private fun MaterialChecklistScreen(
             ) {
                 when {
                     uiState.isLoading && currentChecklist == null -> LoadingCard(text = stringResource(R.string.common_loading_materials))
-                    uiState.errorMessage != null && currentChecklist == null -> MaterialErrorCard(
-                        message = uiState.errorMessage.orEmpty(),
-                        onRetry = { materialViewModel.selectItem(checklistId) }
-                    )
+                    uiState.errorMessageResId != null && currentChecklist == null -> {
+                        val messageResId = uiState.errorMessageResId
+                        MaterialErrorCard(
+                            message = if (messageResId != null) stringResource(messageResId) else stringResource(R.string.material_not_found),
+                            onRetry = { materialViewModel.selectItem(checklistId) }
+                        )
+                    }
 
                     currentChecklist != null -> MaterialChecklistDetail(
                         checklist = currentChecklist,
                         checkedIds = uiState.checkedRequirementIds,
-                        saveMessage = uiState.saveMessage,
+                        saveMessageResId = uiState.saveMessageResId,
                         onToggle = materialViewModel::toggleRequirement,
                         onOpenLinkedChecklist = onOpenChecklist
                     )
@@ -2682,13 +3203,13 @@ private fun SavedMaterialsSection(
                 IconBadge(icon = Icons.Filled.List, tint = ElderGreen, background = ElderGreenSoft, size = responsive.iconMedium)
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)) {
                     Text(
-                        text = item.title,
+                        text = item.titleResId?.let { stringResource(it) } ?: item.title,
                         color = ElderText,
                         fontSize = responsive.cardTitle,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "已核对 ${item.checkedCount} / ${item.totalCount} 项",
+                        text = stringResource(R.string.material_checked_count, item.checkedCount, item.totalCount),
                         color = ElderTextMuted,
                         fontSize = responsive.label
                     )
@@ -2726,36 +3247,41 @@ private fun MaterialErrorCard(message: String, onRetry: () -> Unit) {
 private fun MaterialChecklistDetail(
     checklist: MaterialChecklist,
     checkedIds: Set<String>,
-    saveMessage: String?,
+    saveMessageResId: Int?,
     onToggle: (String) -> Unit,
     onOpenLinkedChecklist: (String) -> Unit
 ) {
     val responsive = LocalElderResponsive.current
     SectionTitle(text = stringResource(R.string.material_reminder), icon = Icons.Filled.Info)
-    NoticeCard(text = checklist.tips.joinToString("\n"))
+    val tips = if (checklist.tipResIds.isNotEmpty()) {
+        checklist.tipResIds.map { stringResource(it) }.joinToString("\n")
+    } else {
+        checklist.tips.joinToString("\n")
+    }
+    NoticeCard(text = tips)
 
     SectionTitle(text = stringResource(R.string.material_check), icon = Icons.Filled.List)
     Text(
-        text = "已核对 ${checkedIds.size} / ${checklist.requirements.size} 项",
+        text = stringResource(R.string.material_checked_count, checkedIds.size, checklist.requirements.size),
         color = ElderBlueDark,
         fontSize = responsive.bodyLarge,
         fontWeight = FontWeight.Bold
     )
     checklist.requirements.forEach { requirement ->
         RequirementCheckRow(
-            name = requirement.name,
-            description = requirement.description,
-            note = requirement.note,
+            name = requirement.nameResId?.let { stringResource(it) } ?: requirement.name,
+            description = requirement.descriptionResId?.let { stringResource(it) } ?: requirement.description,
+            note = requirement.noteResId?.let { stringResource(it) } ?: requirement.note,
             required = requirement.required,
             checked = requirement.id in checkedIds,
             linkedChecklistId = requirement.linkedChecklistId,
-            linkedActionLabel = requirement.linkedActionLabel,
+            linkedActionLabel = requirement.linkedActionLabelResId?.let { stringResource(it) } ?: requirement.linkedActionLabel,
             onOpenLinkedChecklist = onOpenLinkedChecklist,
             onToggle = { onToggle(requirement.id) }
         )
     }
 
-    saveMessage?.takeIf { it.isNotBlank() }?.let { message ->
+    saveMessageResId?.let { messageResId ->
         SoftCard(containerColor = ElderGreenSoft, borderColor = Color(0xFFBFE6CA), elevation = 0.dp) {
             Row(
                 modifier = Modifier.padding(responsive.cardSpacing),
@@ -2763,7 +3289,7 @@ private fun MaterialChecklistDetail(
                 horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)
             ) {
                 Icon(Icons.Filled.Check, contentDescription = null, tint = ElderGreen, modifier = Modifier.size(responsive.iconSmall))
-                Text(text = message, color = ElderGreen, fontSize = responsive.body, fontWeight = FontWeight.Bold)
+                Text(text = stringResource(messageResId), color = ElderGreen, fontSize = responsive.body, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -2814,7 +3340,7 @@ private fun RequirementCheckRow(
                         modifier = Modifier.weight(1f)
                     )
                     StatusPill(
-                        text = if (required) "必带" else "可选",
+                        text = if (required) stringResource(R.string.material_required) else stringResource(R.string.material_optional),
                         color = if (required) ElderOrange else ElderGreen,
                         background = if (required) ElderOrangeSoft else ElderGreenSoft
                     )
@@ -2894,6 +3420,217 @@ private fun AdaptivePairRow(
 }
 
 @Composable
+private fun ChatHistorySheet(
+    items: List<ChatHistoryItem>,
+    onRestore: (String) -> Unit,
+    onResend: (String) -> Unit,
+    onDelete: (String) -> Unit,
+    onClearAll: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val responsive = LocalElderResponsive.current
+    val context = LocalContext.current
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(horizontal = responsive.pagePadding, vertical = responsive.cardSpacing),
+        verticalArrangement = Arrangement.spacedBy(responsive.cardSpacing)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)
+        ) {
+            IconBadge(icon = Icons.Filled.DateRange, tint = ElderBlue, background = ElderBlueSoft, size = responsive.iconMedium)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.chat_history_title),
+                    color = ElderText,
+                    fontSize = responsive.cardTitle,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = stringResource(R.string.chat_history_answered),
+                    color = ElderTextMuted,
+                    fontSize = responsive.label
+                )
+            }
+        }
+
+        if (items.isEmpty()) {
+            SoftCard(containerColor = Color.White, borderColor = ElderLine) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(responsive.cardPadding),
+                    verticalArrangement = Arrangement.spacedBy(responsive.rowSpacing)
+                ) {
+                    Text(
+                        text = stringResource(R.string.chat_history_empty_title),
+                        color = ElderText,
+                        fontSize = responsive.cardTitle,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = stringResource(R.string.chat_history_empty_desc),
+                        color = ElderTextMuted,
+                        fontSize = responsive.body
+                    )
+                }
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 560.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(responsive.cardSpacing)
+            ) {
+                items.forEach { item ->
+                    ChatHistoryItemCard(
+                        item = item,
+                        timeText = formatHistoryTime(context, item.updatedAtMillis),
+                        inputTypeText = stringResource(historyInputTypeLabelRes(item.inputType)),
+                        onRestore = { onRestore(item.id) },
+                        onResend = { onResend(item.id) },
+                        onDelete = { onDelete(item.id) },
+                    )
+                }
+            }
+
+            SecondaryActionButton(
+                text = stringResource(R.string.chat_history_clear_all),
+                icon = Icons.Filled.Close,
+                onClick = onClearAll,
+                height = 52.dp
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChatHistoryItemCard(
+    item: ChatHistoryItem,
+    timeText: String,
+    inputTypeText: String,
+    onRestore: () -> Unit,
+    onResend: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val responsive = LocalElderResponsive.current
+    SoftCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onRestore),
+        containerColor = Color.White,
+        borderColor = Color(0xFFD6E6FB)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 96.dp)
+                .padding(responsive.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(responsive.rowSpacing)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)
+            ) {
+                IconBadge(icon = Icons.Filled.Email, tint = ElderBlue, background = ElderBlueSoft, size = responsive.iconSmall + 12.dp)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = item.question,
+                        color = ElderText,
+                        fontSize = responsive.bodyLarge,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = timeText,
+                        color = ElderTextMuted,
+                        fontSize = responsive.label,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                StatusPill(
+                    text = inputTypeText,
+                    color = ElderBlue,
+                    background = ElderBlueSoft
+                )
+            }
+            if (item.answerPreview.isNotBlank()) {
+                Text(
+                    text = item.answerPreview,
+                    color = ElderTextMuted,
+                    fontSize = responsive.body,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            AdaptivePairRow(
+                first = { itemModifier ->
+                    SecondaryActionButton(
+                        text = stringResource(R.string.chat_history_restore),
+                        icon = Icons.Filled.KeyboardArrowRight,
+                        onClick = onRestore,
+                        modifier = itemModifier,
+                        height = 50.dp
+                    )
+                },
+                second = { itemModifier ->
+                    SecondaryActionButton(
+                        text = stringResource(R.string.chat_history_resend),
+                        icon = Icons.Filled.Refresh,
+                        onClick = onResend,
+                        modifier = itemModifier,
+                        height = 50.dp
+                    )
+                }
+            )
+            SecondaryActionButton(
+                text = stringResource(R.string.chat_history_delete),
+                icon = Icons.Filled.Close,
+                onClick = onDelete,
+                height = 50.dp
+            )
+        }
+    }
+}
+
+private fun historyInputTypeLabelRes(inputType: String): Int {
+    return when (inputType) {
+        "voice" -> R.string.chat_history_input_voice
+        "quick" -> R.string.chat_history_input_quick
+        "example" -> R.string.chat_history_input_example
+        "guidance", "scenario" -> R.string.chat_history_input_guidance
+        "history" -> R.string.chat_history_input_history
+        else -> R.string.chat_history_input_text
+    }
+}
+
+private fun formatHistoryTime(context: Context, millis: Long): String {
+    if (millis <= 0L) return ""
+    val locale = Locale.getDefault()
+    val itemCalendar = Calendar.getInstance().apply { timeInMillis = millis }
+    val todayCalendar = Calendar.getInstance()
+    val yesterdayCalendar = Calendar.getInstance().apply {
+        add(Calendar.DAY_OF_YEAR, -1)
+    }
+    val time = SimpleDateFormat("HH:mm", locale).format(Date(millis))
+    return when {
+        itemCalendar.get(Calendar.YEAR) == todayCalendar.get(Calendar.YEAR) &&
+            itemCalendar.get(Calendar.DAY_OF_YEAR) == todayCalendar.get(Calendar.DAY_OF_YEAR) ->
+            "${context.getString(R.string.chat_history_today)} $time"
+        itemCalendar.get(Calendar.YEAR) == yesterdayCalendar.get(Calendar.YEAR) &&
+            itemCalendar.get(Calendar.DAY_OF_YEAR) == yesterdayCalendar.get(Calendar.DAY_OF_YEAR) ->
+            "${context.getString(R.string.chat_history_yesterday)} $time"
+        else -> SimpleDateFormat("MM/dd HH:mm", locale).format(Date(millis))
+    }
+}
+
+@Composable
 private fun PortSummaryCard(port: PortInfo, onClick: () -> Unit) {
     val responsive = LocalElderResponsive.current
     SoftCard(modifier = Modifier.clickable(onClick = onClick)) {
@@ -2909,20 +3646,20 @@ private fun PortSummaryCard(port: PortInfo, onClick: () -> Unit) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(responsive.smallSpacing)) {
                         Text(
-                            port.name,
+                            stringResource(port.nameResId),
                             color = ElderText,
                             fontSize = responsive.cardTitle,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.weight(1f)
                         )
-                        StatusPill(text = "正常", color = ElderGreen, background = ElderGreenSoft)
+                        StatusPill(text = stringResource(port.statusResId), color = ElderGreen, background = ElderGreenSoft)
                     }
-                    InfoLine("开放：${port.openTime}")
-                    InfoLine("预计等待：${port.waitTime}", valueColor = ElderGreen)
+                    InfoLine(stringResource(R.string.port_open_time, port.openTime))
+                    InfoLine(stringResource(R.string.port_wait_time_minutes, port.waitTimeMinutes), valueColor = ElderGreen)
                 }
             }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                SecondaryMiniButton(text = "查看详情", onClick = onClick)
+                SecondaryMiniButton(text = stringResource(R.string.port_view_detail), onClick = onClick)
             }
         }
     }
@@ -2948,15 +3685,15 @@ private fun FaqSection(
     ) {
         faqCategories.forEach { category ->
             FilterChipLike(
-                text = category,
-                selected = category == selectedCategory,
-                onClick = { onCategorySelected(category) }
+                text = stringResource(category.titleResId),
+                selected = category.id == selectedCategory,
+                onClick = { onCategorySelected(category.id) }
             )
         }
     }
     Column(verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)) {
         visibleItems.forEach { item ->
-            SoftCard(modifier = Modifier.clickable { onQuestionClick(item.question) }, elevation = 0.dp) {
+            SoftCard(modifier = Modifier.clickable { onQuestionClick(item.query) }, elevation = 0.dp) {
                 Row(
                     modifier = Modifier.padding(horizontal = responsive.cardSpacing, vertical = responsive.rowSpacing),
                     verticalAlignment = Alignment.CenterVertically,
@@ -2964,7 +3701,7 @@ private fun FaqSection(
                 ) {
                     IconBadge(icon = Icons.Filled.Info, size = responsive.iconSmall + 18.dp)
                     Text(
-                        text = item.question,
+                        text = stringResource(item.titleResId),
                         color = ElderText,
                         fontSize = responsive.bodyLarge,
                         fontWeight = FontWeight.Bold,
@@ -2979,7 +3716,7 @@ private fun FaqSection(
     }
     if (hasMoreItems) {
         SecondaryActionButton(
-            text = if (isExpanded) "收起" else "展开更多",
+            text = if (isExpanded) stringResource(R.string.faq_collapse) else stringResource(R.string.faq_expand_more),
             icon = if (isExpanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
             onClick = { isExpanded = !isExpanded },
             height = 52.dp
@@ -3191,6 +3928,8 @@ private fun AssistantStructuredAnswerCard(
 @Composable
 private fun QaConclusionBox(conclusion: String) {
     val responsive = LocalElderResponsive.current
+    var expanded by remember(conclusion) { mutableStateOf(false) }
+    val canExpand = conclusion.length > 96
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -3210,9 +3949,15 @@ private fun QaConclusionBox(conclusion: String) {
             color = ElderText,
             fontSize = responsive.bodyLarge,
             fontWeight = FontWeight.Bold,
-            maxLines = 3,
+            maxLines = if (expanded) Int.MAX_VALUE else 3,
             overflow = TextOverflow.Ellipsis
         )
+        if (canExpand) {
+            SecondaryMiniButton(
+                text = stringResource(if (expanded) R.string.qa_collapse_conclusion else R.string.qa_expand_conclusion),
+                onClick = { expanded = !expanded }
+            )
+        }
     }
 }
 
@@ -3808,7 +4553,8 @@ private fun VoiceInputPanel(
     onStartRecording: () -> Unit,
     onPickSample: () -> Unit,
     onStopRecording: () -> Unit,
-    onCancel: () -> Unit
+    onCancel: () -> Unit,
+    showDebugControls: Boolean = false
 ) {
     val responsive = LocalElderResponsive.current
     SoftCard(containerColor = Color.White, borderColor = Color(0xFFBFD8FF)) {
@@ -3851,11 +4597,13 @@ private fun VoiceInputPanel(
                 }
             }
 
-            SegmentedControl(
-                options = voiceLanguageOptions,
-                selected = selectedLanguage,
-                onSelected = onLanguageSelected
-            )
+            if (showDebugControls) {
+                SegmentedControl(
+                    options = voiceLanguageOptions,
+                    selected = selectedLanguage,
+                    onSelected = onLanguageSelected
+                )
+            }
 
             if (!statusMessage.isNullOrBlank()) {
                 Text(
@@ -3881,7 +4629,7 @@ private fun VoiceInputPanel(
                     onClick = onCancel,
                     height = 52.dp
                 )
-            } else {
+            } else if (showDebugControls) {
                 SecondaryActionButton(
                     text = stringResource(R.string.voice_pick_sample),
                     icon = Icons.Filled.Search,
@@ -3971,8 +4719,8 @@ private fun ServiceGrid(items: List<ServiceItem>, onClick: () -> Unit) {
         Row(horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)) {
             row.forEach { item ->
                 ActionCard(
-                    title = item.title,
-                    subtitle = item.subtitle,
+                    title = stringResource(item.titleResId),
+                    subtitle = stringResource(item.subtitleResId),
                     icon = item.icon,
                     onClick = item.onClick ?: onClick,
                     modifier = Modifier.weight(1f),
@@ -3997,7 +4745,7 @@ private fun MyListItem(item: ServiceItem) {
         ) {
             IconBadge(icon = item.icon, size = responsive.iconMedium)
             Text(
-                text = item.title,
+                text = stringResource(item.titleResId),
                 color = ElderText,
                 fontSize = responsive.cardTitle,
                 fontWeight = FontWeight.Bold,
@@ -4168,8 +4916,9 @@ private fun InfoLine(text: String, valueColor: Color = ElderTextMuted) {
 }
 
 private data class ServiceItem(
-    val title: String,
-    val subtitle: String,
+    val id: String,
+    @param:StringRes val titleResId: Int,
+    @param:StringRes val subtitleResId: Int,
     val icon: ImageVector,
     val onClick: (() -> Unit)? = null
 )

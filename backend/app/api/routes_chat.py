@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException
 from app.config import settings
 from app.schemas.chat_schema import ChatPolicyRequest, ChatPolicyResponse, SourceItem, TtsInfo
 from app.services.dify_service import dify_service, parse_structured_answer
+from app.services.display_localization_service import localize_display_answer
 from app.services.language_service import normalize_display_language, normalize_speech_language
 from app.services.qwen_text_service import qwen_text_service
 from app.services.tts_service import TtsSynthesisError, tts_service
@@ -141,27 +142,25 @@ async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
         for item in retriever_resources
     ]
 
-    try:
-        if (
-            display_source_text
-            and hasattr(qwen_text_service, "rewrite_display_text")
-            and not (is_structured_dify_answer and display_language == "zh-CN")
-        ):
-            display_result = await qwen_text_service.rewrite_display_text(display_source_text, display_language)
-        else:
-            display_result = None
-        display_text = display_result.text if display_result and display_result.text else display_source_text
-        if display_result:
-            usage["display_rewrite"] = display_result.usage
-    except (AttributeError, httpx.HTTPError) as exc:
+    localization_result = await localize_display_answer(
+        raw_answer=raw_answer,
+        structured_answer=structured_answer,
+        display_language=display_language,
+        is_structured_dify_answer=is_structured_dify_answer,
+        qwen_text_service=qwen_text_service,
+    )
+    display_text = localization_result.display_text
+    structured_answer = localization_result.structured_answer
+    usage.update(localization_result.usage)
+    if localization_result.usage.get("localization_error"):
         logger.warning(
-            "chat_policy display_rewrite_fallback user_id=%s display_length=%s language=%s error_type=%s",
+            "chat_policy display_localization_fallback user_id=%s display_length=%s language=%s mode=%s error_type=%s",
             user_id,
             len(display_source_text),
             display_language,
-            type(exc).__name__,
+            localization_result.usage.get("localization_mode"),
+            localization_result.usage.get("localization_error"),
         )
-        display_text = display_source_text
 
     try:
         if display_text:
@@ -221,7 +220,7 @@ async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
     )
 
     return ChatPolicyResponse(
-        answer=display_text,
+        answer=raw_answer,
         conversation_id=conversation_id,
         original_text=original_text,
         search_query=search_query,

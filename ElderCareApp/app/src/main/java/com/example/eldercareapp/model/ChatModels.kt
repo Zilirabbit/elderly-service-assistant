@@ -81,6 +81,28 @@ data class QaScenarioOption(
     val standardQuestion: String,
 )
 
+data class ChatHistoryItem(
+    val id: String = "",
+    val question: String = "",
+    val answerPreview: String = "",
+    val messages: List<ChatHistoryMessage> = emptyList(),
+    val conversationId: String = "",
+    val inputType: String = "text",
+    val displayLanguage: String = "zh-CN",
+    val speechLanguage: String = "zh-CN",
+    val createdAtMillis: Long = 0L,
+    val updatedAtMillis: Long = 0L,
+)
+
+data class ChatHistoryMessage(
+    val id: Long = 0L,
+    val role: String = "user",
+    val text: String = "",
+    val answerUiModel: QaAnswerUiModel? = null,
+    val ttsText: String = "",
+    val ttsAudioUrl: String? = null,
+)
+
 data class TtsInfo(
     val language: String? = "zh-CN",
     val voice: String? = "longxiaochun_v3",

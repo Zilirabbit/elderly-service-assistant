@@ -3,6 +3,9 @@ package com.example.eldercareapp.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.eldercareapp.api.ApiClient
+import com.example.eldercareapp.data.local.ChatHistoryStorage
+import com.example.eldercareapp.model.ChatHistoryItem
+import com.example.eldercareapp.model.ChatHistoryMessage
 import com.example.eldercareapp.model.ChatPolicyRequest
 import com.example.eldercareapp.model.ChatPolicyResponse
 import com.example.eldercareapp.model.QaAnswerUiModel
@@ -21,6 +24,7 @@ import retrofit2.HttpException
 import java.io.File
 import java.io.IOException
 import java.net.SocketTimeoutException
+import java.util.UUID
 
 enum class ChatMessageRole {
     User,
@@ -49,6 +53,7 @@ data class ChatUiState(
     val ttsAudioUrl: String? = null,
     val lastVoiceSampleName: String = "",
     val lastVoiceSampleSizeBytes: Long = 0L,
+    val historyItems: List<ChatHistoryItem> = emptyList(),
     val isLoading: Boolean = false,
     val isTranscribing: Boolean = false,
     val errorMessage: String? = null,
@@ -82,9 +87,65 @@ class ChatViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
     private var nextMessageId = 1L
+    private var historyStorage: ChatHistoryStorage? = null
 
     fun updateInput(value: String) {
         _uiState.value = _uiState.value.copy(input = value, errorMessage = null)
+    }
+
+    fun attachHistoryStorage(storage: ChatHistoryStorage) {
+        if (historyStorage != null) return
+        historyStorage = storage
+        _uiState.value = _uiState.value.copy(historyItems = storage.load())
+    }
+
+    fun restoreHistory(itemId: String) {
+        val item = _uiState.value.historyItems.firstOrNull { it.id == itemId } ?: return
+        val restoredMessages = item.messages.map { it.toChatMessageUi() }
+        val lastAssistant = restoredMessages.lastOrNull { it.role == ChatMessageRole.Assistant }
+        val lastUser = restoredMessages.lastOrNull { it.role == ChatMessageRole.User }
+
+        nextMessageId = (restoredMessages.maxOfOrNull { it.id } ?: 0L) + 1L
+        _uiState.value = _uiState.value.copy(
+            input = "",
+            answer = lastAssistant?.text.orEmpty(),
+            answerUiModel = lastAssistant?.answerUiModel,
+            messages = restoredMessages,
+            conversationId = item.conversationId,
+            lastQuestion = lastUser?.text ?: item.question,
+            sourceDocuments = emptyList(),
+            voiceDraft = null,
+            ttsText = lastAssistant?.ttsText.orEmpty(),
+            ttsAudioUrl = lastAssistant?.ttsAudioUrl,
+            isLoading = false,
+            isTranscribing = false,
+            errorMessage = null,
+        )
+    }
+
+    fun deleteHistory(itemId: String) {
+        val updated = _uiState.value.historyItems.filterNot { it.id == itemId }
+        persistHistoryItems(updated)
+    }
+
+    fun clearHistory() {
+        persistHistoryItems(emptyList())
+    }
+
+    fun resendHistoryQuestion(
+        itemId: String,
+        displayLanguage: String = "zh-CN",
+        speechLanguage: String = "zh-CN",
+        uiStrings: ChatUiStrings = ChatUiStrings(),
+    ) {
+        val item = _uiState.value.historyItems.firstOrNull { it.id == itemId } ?: return
+        sendQuestion(
+            inputType = "history",
+            displayLanguage = displayLanguage.ifBlank { item.displayLanguage },
+            speechLanguage = speechLanguage.ifBlank { item.speechLanguage },
+            questionOverride = item.question,
+            uiStrings = uiStrings
+        )
     }
 
     fun submitPrefilledQuestion(
@@ -187,18 +248,20 @@ class ChatViewModel : ViewModel() {
                 val answerUiModel = response.toQaAnswerUiModel(cleanedAnswer, sourceDocuments, uiStrings)
                     .takeIf { shouldUseStructuredAnswer }
 
-                _uiState.value = current.copy(
+                val assistantMessage = ChatMessageUi(
+                    id = nextMessageId(),
+                    role = ChatMessageRole.Assistant,
+                    text = cleanedAnswer,
+                    answerUiModel = answerUiModel,
+                    ttsText = cleanMarkdownAnswer(response.tts?.text?.takeIf { it.isNotBlank() } ?: cleanedAnswer),
+                    ttsAudioUrl = response.tts?.audio_url
+                )
+                val updatedMessages = current.messages + assistantMessage
+                val nextState = current.copy(
                     input = "",
                     answer = cleanedAnswer,
                     answerUiModel = answerUiModel,
-                    messages = current.messages + ChatMessageUi(
-                        id = nextMessageId(),
-                        role = ChatMessageRole.Assistant,
-                        text = cleanedAnswer,
-                        answerUiModel = answerUiModel,
-                        ttsText = cleanMarkdownAnswer(response.tts?.text?.takeIf { it.isNotBlank() } ?: cleanedAnswer),
-                        ttsAudioUrl = response.tts?.audio_url
-                    ),
+                    messages = updatedMessages,
                     conversationId = response.conversation_id.orEmpty(),
                     lastQuestion = question,
                     sourceDocuments = sourceDocuments,
@@ -207,6 +270,15 @@ class ChatViewModel : ViewModel() {
                     ttsAudioUrl = response.tts?.audio_url,
                     isLoading = false,
                     errorMessage = null,
+                )
+                _uiState.value = nextState
+                saveSuccessfulHistoryItem(
+                    question = question,
+                    messages = updatedMessages,
+                    conversationId = response.conversation_id.orEmpty(),
+                    inputType = inputType,
+                    displayLanguage = displayLanguage,
+                    speechLanguage = speechLanguage,
                 )
             } catch (exc: CancellationException) {
                 throw exc
@@ -318,6 +390,75 @@ class ChatViewModel : ViewModel() {
             )
         )
         return response.audio_url
+    }
+
+    private fun saveSuccessfulHistoryItem(
+        question: String,
+        messages: List<ChatMessageUi>,
+        conversationId: String,
+        inputType: String,
+        displayLanguage: String,
+        speechLanguage: String,
+    ) {
+        val now = System.currentTimeMillis()
+        val lastAssistantText = messages.lastOrNull { it.role == ChatMessageRole.Assistant }?.text.orEmpty()
+        if (question.isBlank() || lastAssistantText.isBlank()) return
+
+        val item = ChatHistoryItem(
+            id = UUID.randomUUID().toString(),
+            question = question,
+            answerPreview = historyPreview(lastAssistantText),
+            messages = messages.map { it.toHistoryMessage() },
+            conversationId = conversationId,
+            inputType = inputType,
+            displayLanguage = displayLanguage,
+            speechLanguage = speechLanguage,
+            createdAtMillis = now,
+            updatedAtMillis = now,
+        )
+        val updated = (listOf(item) + _uiState.value.historyItems)
+            .distinctBy { it.id }
+            .sortedByDescending { it.updatedAtMillis }
+            .take(ChatHistoryStorage.MaxHistoryItems)
+        persistHistoryItems(updated)
+    }
+
+    private fun persistHistoryItems(items: List<ChatHistoryItem>) {
+        val normalized = items
+            .sortedByDescending { it.updatedAtMillis }
+            .take(ChatHistoryStorage.MaxHistoryItems)
+        historyStorage?.save(normalized)
+        _uiState.value = _uiState.value.copy(historyItems = normalized)
+    }
+
+    private fun ChatMessageUi.toHistoryMessage(): ChatHistoryMessage {
+        return ChatHistoryMessage(
+            id = id,
+            role = when (role) {
+                ChatMessageRole.User -> "user"
+                ChatMessageRole.Assistant -> "assistant"
+            },
+            text = text,
+            answerUiModel = answerUiModel,
+            ttsText = ttsText,
+            ttsAudioUrl = ttsAudioUrl,
+        )
+    }
+
+    private fun ChatHistoryMessage.toChatMessageUi(): ChatMessageUi {
+        return ChatMessageUi(
+            id = id,
+            role = if (role == "assistant") ChatMessageRole.Assistant else ChatMessageRole.User,
+            text = text,
+            answerUiModel = answerUiModel,
+            ttsText = ttsText,
+            ttsAudioUrl = ttsAudioUrl,
+        )
+    }
+
+    private fun historyPreview(value: String): String {
+        val normalized = value.replace("\n", " ").replace(Regex("""\s+"""), " ").trim()
+        return if (normalized.length <= 80) normalized else normalized.take(80).trimEnd() + "..."
     }
 
     private fun ChatPolicyResponse.toQaAnswerUiModel(

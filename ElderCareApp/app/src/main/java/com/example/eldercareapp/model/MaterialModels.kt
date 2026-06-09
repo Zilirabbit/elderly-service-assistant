@@ -1,10 +1,15 @@
 package com.example.eldercareapp.model
 
+import androidx.annotation.StringRes
+
 data class MaterialItem(
     val code: String,
     val title: String,
     val subtitle: String,
     val category: String,
+    @param:StringRes val titleResId: Int? = null,
+    @param:StringRes val subtitleResId: Int? = null,
+    @param:StringRes val categoryResId: Int? = null,
 )
 
 data class MaterialRequirement(
@@ -15,6 +20,10 @@ data class MaterialRequirement(
     val note: String? = null,
     val linkedChecklistId: String? = null,
     val linkedActionLabel: String? = null,
+    @param:StringRes val nameResId: Int? = null,
+    @param:StringRes val descriptionResId: Int? = null,
+    @param:StringRes val noteResId: Int? = null,
+    @param:StringRes val linkedActionLabelResId: Int? = null,
 )
 
 data class MaterialChecklist(
@@ -22,6 +31,8 @@ data class MaterialChecklist(
     val title: String,
     val tips: List<String> = emptyList(),
     val requirements: List<MaterialRequirement> = emptyList(),
+    @param:StringRes val titleResId: Int? = null,
+    val tipResIds: List<Int> = emptyList(),
 )
 
 data class SaveMaterialRequest(
