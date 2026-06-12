@@ -123,7 +123,7 @@ fun UnifiedTopBar(
                 Text(
                     text = title,
                     color = ElderText,
-                    fontSize = responsive.topBarTitle,
+                    fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
@@ -174,7 +174,7 @@ fun UnifiedTopBar(
                     Text(
                         text = title,
                         color = ElderText,
-                        fontSize = responsive.topBarTitle,
+                        fontSize = 22.sp,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Start,
                         maxLines = 1,
@@ -340,7 +340,7 @@ fun SectionTitle(
         Text(
             text = text,
             color = ElderText,
-            fontSize = responsive.sectionTitle,
+            fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis

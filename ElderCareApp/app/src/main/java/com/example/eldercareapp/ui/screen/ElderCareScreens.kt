@@ -1156,151 +1156,37 @@ private fun HomeScreen(
             )
         }
     ) {
-        SoftCard(containerColor = ElderBlueSoft, borderColor = Color(0xFFBFD8FF)) {
-            Column(modifier = Modifier.padding(responsive.cardPadding), verticalArrangement = Arrangement.spacedBy(responsive.cardSpacing)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)
-                ) {
-                    IconBadge(icon = Icons.Filled.Email, size = responsive.iconLarge)
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)) {
-                        Text(
-                            text = stringResource(R.string.home_hero_title),
-                            color = ElderText,
-                            fontSize = responsive.topBarTitle,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = stringResource(R.string.home_hero_desc),
-                            color = ElderTextMuted,
-                            fontSize = responsive.body
-                        )
-                    }
-                }
-                AdaptivePairRow(
-                    first = { itemModifier ->
-                        PrimaryActionButton(
-                            text = stringResource(R.string.home_ask),
-                            icon = Icons.Filled.Email,
-                            onClick = onOpenChat,
-                            modifier = itemModifier
-                        )
-                    },
-                    second = { itemModifier ->
-                        SecondaryActionButton(
-                            text = stringResource(R.string.home_guide),
-                            icon = Icons.Filled.Info,
-                            onClick = onOpenGuide,
-                            modifier = itemModifier
-                        )
-                    }
-                )
-            }
-        }
+        HomeHeroCard(
+            onOpenChat = onOpenChat,
+            onOpenGuide = onOpenGuide
+        )
 
-        SoftCard(containerColor = ElderBluePale, borderColor = Color(0xFFBFD8FF)) {
-            Column(
-                modifier = Modifier.padding(responsive.cardPadding),
-                verticalArrangement = Arrangement.spacedBy(responsive.cardSpacing)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)
-                ) {
-                    IconBadge(icon = Icons.Filled.Call, size = responsive.iconMedium)
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)) {
-                        Text(
-                            text = stringResource(R.string.home_help_title),
-                            color = ElderText,
-                            fontSize = responsive.cardTitle,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = stringResource(R.string.home_help_desc),
-                            color = ElderTextMuted,
-                            fontSize = responsive.body,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-                if (responsive.stackActionRows) {
-                    PrimaryActionButton(
-                        text = stringResource(R.string.home_contact_service),
-                        icon = Icons.Filled.Call,
-                        onClick = { Toast.makeText(context, "客服功能暂未接入", Toast.LENGTH_SHORT).show() },
-                        height = 52.dp
-                    )
-                    SecondaryActionButton(
-                        text = stringResource(R.string.home_volunteer_help),
-                        icon = Icons.Filled.Favorite,
-                        onClick = { Toast.makeText(context, "志愿者协助暂未接入", Toast.LENGTH_SHORT).show() },
-                        height = 52.dp
-                    )
-                    SecondaryActionButton(
-                        text = stringResource(R.string.home_video_guide),
-                        icon = Icons.Filled.PlayArrow,
-                        onClick = { Toast.makeText(context, "视频讲解暂未接入", Toast.LENGTH_SHORT).show() },
-                        height = 52.dp
-                    )
-                } else {
-                    Row(horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)) {
-                        PrimaryActionButton(
-                            text = stringResource(R.string.home_contact_service),
-                            icon = Icons.Filled.Call,
-                            onClick = { Toast.makeText(context, "客服功能暂未接入", Toast.LENGTH_SHORT).show() },
-                            modifier = Modifier.weight(1f),
-                            height = 52.dp
-                        )
-                        SecondaryActionButton(
-                            text = stringResource(R.string.home_volunteer_help),
-                            icon = Icons.Filled.Favorite,
-                            onClick = { Toast.makeText(context, "志愿者协助暂未接入", Toast.LENGTH_SHORT).show() },
-                            modifier = Modifier.weight(1f),
-                            height = 52.dp
-                        )
-                        SecondaryActionButton(
-                            text = stringResource(R.string.home_video_guide),
-                            icon = Icons.Filled.PlayArrow,
-                            onClick = { Toast.makeText(context, "视频讲解暂未接入", Toast.LENGTH_SHORT).show() },
-                            modifier = Modifier.weight(1f),
-                            height = 52.dp
-                        )
-                    }
-                }
-            }
-        }
-
-        if (!responsive.isExtraLargeText) {
-            val regionOptions = listOf(
-                "hong_kong" to stringResource(R.string.home_filter_hong_kong),
-                "macao" to stringResource(R.string.home_filter_macao),
-                "all" to stringResource(R.string.home_filter_all)
-            )
-            val directionOptions = listOf(
-                "to_hk_macao" to stringResource(R.string.home_direction_to_hk_macao),
-                "return_mainland" to stringResource(R.string.home_direction_return_mainland),
-                "all" to stringResource(R.string.home_filter_all)
-            )
-            SegmentedControl(
-                options = regionOptions.map { it.second },
-                selected = regionOptions.firstOrNull { it.first == region }?.second ?: regionOptions.first().second,
-                onSelected = { selected ->
-                    region = regionOptions.firstOrNull { it.second == selected }?.first ?: region
-                }
-            )
-            SegmentedControl(
-                options = directionOptions.map { it.second },
-                selected = directionOptions.firstOrNull { it.first == direction }?.second ?: directionOptions.first().second,
-                onSelected = { selected ->
-                    direction = directionOptions.firstOrNull { it.second == selected }?.first ?: direction
-                }
-            )
-        }
+        HomeHelpEntryRow(
+            onContactClick = { Toast.makeText(context, context.getString(R.string.service_unavailable_toast), Toast.LENGTH_SHORT).show() },
+            onVolunteerClick = { Toast.makeText(context, context.getString(R.string.service_unavailable_toast), Toast.LENGTH_SHORT).show() },
+            onVideoClick = { Toast.makeText(context, context.getString(R.string.service_unavailable_toast), Toast.LENGTH_SHORT).show() }
+        )
 
         SectionTitle(text = stringResource(R.string.home_ports))
+        val regionOptions = listOf(
+            "hong_kong" to stringResource(R.string.home_filter_hong_kong),
+            "macao" to stringResource(R.string.home_filter_macao),
+            "all" to stringResource(R.string.home_filter_all)
+        )
+        val directionOptions = listOf(
+            "to_hk_macao" to stringResource(R.string.home_direction_to_hk_macao),
+            "return_mainland" to stringResource(R.string.home_direction_return_mainland),
+            "all" to stringResource(R.string.home_filter_all)
+        )
+        HomePortFilters(
+            regionOptions = regionOptions,
+            selectedRegion = region,
+            onRegionSelected = { region = it },
+            directionOptions = directionOptions,
+            selectedDirection = direction,
+            onDirectionSelected = { direction = it }
+        )
+
         ports.forEach { port ->
             PortSummaryCard(port = port, onClick = onOpenPortDetail)
         }
@@ -1316,13 +1202,6 @@ private fun HomeScreen(
             selectedCategory = faqCategory,
             onCategorySelected = { faqCategory = it },
             onQuestionClick = onFaqClick
-        )
-
-        ActionCard(
-            title = stringResource(R.string.home_saved_materials),
-            subtitle = stringResource(R.string.home_saved_materials_desc),
-            icon = Icons.Filled.List,
-            onClick = onOpenMaterialList
         )
     }
 }
@@ -3631,36 +3510,225 @@ private fun formatHistoryTime(context: Context, millis: Long): String {
 }
 
 @Composable
-private fun PortSummaryCard(port: PortInfo, onClick: () -> Unit) {
+private fun HomeHeroCard(
+    onOpenChat: () -> Unit,
+    onOpenGuide: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val responsive = LocalElderResponsive.current
-    SoftCard(modifier = Modifier.clickable(onClick = onClick)) {
-        Column(
-            modifier = Modifier.padding(responsive.cardPadding),
-            verticalArrangement = Arrangement.spacedBy(responsive.cardSpacing)
-        ) {
+    SoftCard(modifier = modifier, containerColor = ElderBlueSoft, borderColor = Color(0xFFBFD8FF)) {
+        Column(modifier = Modifier.padding(responsive.cardPadding), verticalArrangement = Arrangement.spacedBy(responsive.cardSpacing)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)
             ) {
-                IconBadge(icon = port.icon, size = responsive.iconMedium)
+                IconBadge(icon = Icons.Filled.Email, size = responsive.iconLarge)
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(responsive.smallSpacing)) {
-                        Text(
-                            stringResource(port.nameResId),
-                            color = ElderText,
-                            fontSize = responsive.cardTitle,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.weight(1f)
-                        )
-                        StatusPill(text = stringResource(port.statusResId), color = ElderGreen, background = ElderGreenSoft)
-                    }
-                    InfoLine(stringResource(R.string.port_open_time, port.openTime))
-                    InfoLine(stringResource(R.string.port_wait_time_minutes, port.waitTimeMinutes), valueColor = ElderGreen)
+                    Text(
+                        text = stringResource(R.string.home_hero_title),
+                        color = ElderText,
+                        fontSize = responsive.topBarTitle,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = stringResource(R.string.home_hero_desc),
+                        color = ElderTextMuted,
+                        fontSize = responsive.body
+                    )
                 }
             }
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                SecondaryMiniButton(text = stringResource(R.string.port_view_detail), onClick = onClick)
+            AdaptivePairRow(
+                first = { itemModifier ->
+                    PrimaryActionButton(
+                        text = stringResource(R.string.home_ask),
+                        icon = Icons.Filled.Email,
+                        onClick = onOpenChat,
+                        modifier = itemModifier
+                    )
+                },
+                second = { itemModifier ->
+                    SecondaryActionButton(
+                        text = stringResource(R.string.home_guide),
+                        icon = Icons.Filled.Info,
+                        onClick = onOpenGuide,
+                        modifier = itemModifier
+                    )
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun HomeHelpEntryRow(
+    onContactClick: () -> Unit,
+    onVolunteerClick: () -> Unit,
+    onVideoClick: () -> Unit
+) {
+    val responsive = LocalElderResponsive.current
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)
+    ) {
+        HomeHelpEntryCard(
+            title = stringResource(R.string.home_contact_service),
+            icon = Icons.Filled.Call,
+            tint = Color(0xFF0AA6A6),
+            onClick = onContactClick,
+            modifier = Modifier.weight(1f)
+        )
+        HomeHelpEntryCard(
+            title = stringResource(R.string.home_volunteer_help),
+            icon = Icons.Filled.Favorite,
+            tint = ElderOrange,
+            onClick = onVolunteerClick,
+            modifier = Modifier.weight(1f)
+        )
+        HomeHelpEntryCard(
+            title = stringResource(R.string.home_video_guide),
+            icon = Icons.Filled.PlayArrow,
+            tint = Color(0xFF7A4DE8),
+            onClick = onVideoClick,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun HomeHelpEntryCard(
+    title: String,
+    icon: ImageVector,
+    tint: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val responsive = LocalElderResponsive.current
+    SoftCard(
+        modifier = modifier
+            .height(112.dp)
+            .clickable(onClick = onClick),
+        containerColor = Color.White,
+        borderColor = tint.copy(alpha = 0.18f),
+        elevation = 1.dp
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = responsive.smallSpacing, vertical = responsive.cardSpacing),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Top
+            ) {
+                IconBadge(
+                    icon = icon,
+                    tint = tint,
+                    background = tint.copy(alpha = 0.14f),
+                    size = 46.dp
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = title,
+                    color = ElderText,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    lineHeight = 18.sp,
+                    maxLines = 3,
+                    textAlign = TextAlign.Center
+                )
             }
+        }
+    }
+}
+
+@Composable
+private fun HomePortFilters(
+    regionOptions: List<Pair<String, String>>,
+    selectedRegion: String,
+    onRegionSelected: (String) -> Unit,
+    directionOptions: List<Pair<String, String>>,
+    selectedDirection: String,
+    onDirectionSelected: (String) -> Unit
+) {
+    val responsive = LocalElderResponsive.current
+    Column(verticalArrangement = Arrangement.spacedBy(responsive.rowSpacing)) {
+        HomeFilterRow(
+            label = stringResource(R.string.home_filter_region_label),
+            options = regionOptions,
+            selectedKey = selectedRegion,
+            onSelected = onRegionSelected
+        )
+        HomeFilterRow(
+            label = stringResource(R.string.home_filter_direction_label),
+            options = directionOptions,
+            selectedKey = selectedDirection,
+            onSelected = onDirectionSelected
+        )
+    }
+}
+
+@Composable
+private fun HomeFilterRow(
+    label: String,
+    options: List<Pair<String, String>>,
+    selectedKey: String,
+    onSelected: (String) -> Unit
+) {
+    val responsive = LocalElderResponsive.current
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)
+    ) {
+        Text(
+            text = label,
+            color = ElderTextMuted,
+            fontSize = responsive.body,
+            fontWeight = FontWeight.Bold
+        )
+        SegmentedControl(
+            options = options.map { it.second },
+            selected = options.firstOrNull { it.first == selectedKey }?.second ?: options.first().second,
+            onSelected = { selected ->
+                onSelected(options.firstOrNull { it.second == selected }?.first ?: selectedKey)
+            },
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun PortSummaryCard(port: PortInfo, onClick: () -> Unit) {
+    val responsive = LocalElderResponsive.current
+    SoftCard(modifier = Modifier.clickable(onClick = onClick)) {
+        Row(
+            modifier = Modifier.padding(responsive.cardPadding),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)
+        ) {
+            IconBadge(icon = port.icon, size = responsive.iconMedium)
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(responsive.smallSpacing)) {
+                    Text(
+                        stringResource(port.nameResId),
+                        color = ElderText,
+                        fontSize = responsive.cardTitle,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    StatusPill(text = stringResource(port.statusResId), color = ElderGreen, background = ElderGreenSoft)
+                }
+                InfoLine(stringResource(R.string.port_open_time, port.openTime))
+                InfoLine(stringResource(R.string.port_wait_time_minutes, port.waitTimeMinutes), valueColor = ElderGreen)
+            }
+            Icon(
+                imageVector = Icons.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = ElderBlueDark,
+                modifier = Modifier.size(responsive.iconSmall)
+            )
         }
     }
 }

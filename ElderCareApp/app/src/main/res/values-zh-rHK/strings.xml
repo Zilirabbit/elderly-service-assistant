@@ -159,6 +159,8 @@
     <string name="material_continue_check">繼續核對</string>
     <string name="material_reminder">辦理提醒</string>
     <string name="material_check">材料核對</string>
+    <string name="home_filter_region_label">地區：</string>
+    <string name="home_filter_direction_label">方向：</string>
     <string name="home_filter_hong_kong">香港</string>
     <string name="home_filter_macao">澳門</string>
     <string name="home_filter_all">全部</string>

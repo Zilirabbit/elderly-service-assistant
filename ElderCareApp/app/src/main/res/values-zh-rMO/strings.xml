@@ -91,4 +91,6 @@
     <string name="material_continue_check">繼續核對</string>
     <string name="material_reminder">辦理提醒</string>
     <string name="material_check">材料核對</string>
+    <string name="home_filter_region_label">地區：</string>
+    <string name="home_filter_direction_label">方向：</string>
 </resources>

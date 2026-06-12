@@ -159,6 +159,8 @@
     <string name="material_continue_check">Continue</string>
     <string name="material_reminder">Service reminders</string>
     <string name="material_check">Material check</string>
+    <string name="home_filter_region_label">Region:</string>
+    <string name="home_filter_direction_label">Direction:</string>
     <string name="home_filter_hong_kong">Hong Kong</string>
     <string name="home_filter_macao">Macao</string>
     <string name="home_filter_all">All</string>
