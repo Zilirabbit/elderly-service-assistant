@@ -24,9 +24,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -505,8 +507,7 @@ private data class GuidanceResult(
 private val fontChoices = listOf(
     FontChoice("小字", "小", 0.95f),
     FontChoice("中字", "中", 1.0f),
-    FontChoice("大字", "大", 1.12f),
-    FontChoice("超大字", "超大", 1.25f)
+    FontChoice("大字", "大", 1.12f)
 )
 
 private val ports = listOf(
@@ -3567,7 +3568,9 @@ private fun HomeHelpEntryRow(
 ) {
     val responsive = LocalElderResponsive.current
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min),
         horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)
     ) {
         HomeHelpEntryCard(
@@ -3575,21 +3578,27 @@ private fun HomeHelpEntryRow(
             icon = Icons.Filled.Call,
             tint = Color(0xFF0AA6A6),
             onClick = onContactClick,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
         )
         HomeHelpEntryCard(
             title = stringResource(R.string.home_volunteer_help),
             icon = Icons.Filled.Favorite,
             tint = ElderOrange,
             onClick = onVolunteerClick,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
         )
         HomeHelpEntryCard(
             title = stringResource(R.string.home_video_guide),
             icon = Icons.Filled.PlayArrow,
             tint = Color(0xFF7A4DE8),
             onClick = onVideoClick,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
         )
     }
 }
@@ -3605,40 +3614,33 @@ private fun HomeHelpEntryCard(
     val responsive = LocalElderResponsive.current
     SoftCard(
         modifier = modifier
-            .height(112.dp)
+            .heightIn(min = 112.dp)
             .clickable(onClick = onClick),
         containerColor = Color.White,
         borderColor = tint.copy(alpha = 0.18f),
         elevation = 1.dp
     ) {
-        Box(
+        Column(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
                 .padding(horizontal = responsive.smallSpacing, vertical = responsive.cardSpacing),
-            contentAlignment = Alignment.Center
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Top
-            ) {
-                IconBadge(
-                    icon = icon,
-                    tint = tint,
-                    background = tint.copy(alpha = 0.14f),
-                    size = 46.dp
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = title,
-                    color = ElderText,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    lineHeight = 18.sp,
-                    maxLines = 3,
-                    textAlign = TextAlign.Center
-                )
-            }
+            IconBadge(
+                icon = icon,
+                tint = tint,
+                background = tint.copy(alpha = 0.14f),
+                size = 46.dp
+            )
+            Text(
+                text = title,
+                color = ElderText,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                lineHeight = 18.sp,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }
@@ -4856,7 +4858,7 @@ private fun FontChoiceCard(
                 Text(
                     text = choice.sample,
                     color = if (selected) ElderBlue else ElderText,
-                    fontSize = if (choice.label == "超大字") responsive.cardTitle else 28.sp,
+                    fontSize = 28.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
