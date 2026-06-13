@@ -56,3 +56,7 @@ class ChatPolicyResponse(BaseModel):
     tts: TtsInfo = Field(default_factory=TtsInfo)
     sources: list[SourceItem] = Field(default_factory=list)
     usage: dict[str, Any] = Field(default_factory=dict)
+    cache_hit: bool = False
+    cache_key_hash: str | None = None
+    latency_ms: int | None = None
+    source: str | None = None

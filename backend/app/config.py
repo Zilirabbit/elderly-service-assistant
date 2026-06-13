@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     dify_chat_path: str = "/v1/chat-messages"
     dify_timeout_seconds: int = 60
 
+    rag_cache_enabled: bool = True
+    rag_cache_ttl_seconds: int = 86400
+    rag_prompt_version: str = "prompt_v1"
+    rag_kb_version: str = "kb_202606"
+    rag_cache_db_path: str = "backend/app/data/rag_cache.sqlite3"
+
     default_user_id: str = "demo-user-001"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")

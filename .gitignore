@@ -33,6 +33,7 @@ Thumbs.db
 backend/app/data/exports/*
 !backend/app/data/exports/.gitkeep
 backend/app/data/asr_debug/
+backend/app/data/rag_cache.sqlite3
 demo-assets/videos/*
 !demo-assets/videos/.gitkeep
 demo-assets/apk/*

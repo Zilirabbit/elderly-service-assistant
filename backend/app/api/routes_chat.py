@@ -10,6 +10,11 @@ from app.services.dify_service import dify_service, parse_structured_answer
 from app.services.display_localization_service import localize_display_answer
 from app.services.language_service import normalize_display_language, normalize_speech_language
 from app.services.qwen_text_service import qwen_text_service
+from app.services.rag_cache_service import (
+    ANSWER_MODE_POLICY_CHAT,
+    rag_cache_service,
+    should_skip_cache,
+)
 from app.services.tts_service import TtsSynthesisError, tts_service
 
 router = APIRouter(prefix="/api/v1", tags=["chat"])
@@ -21,6 +26,80 @@ def _is_structured_dify_answer(raw_answer: str, parsed_title: str, confidence: s
     return text.startswith("{") and bool(parsed_title.strip()) and confidence != "low"
 
 
+async def _build_tts_info(
+    display_text: str,
+    speech_language: str,
+    display_language: str,
+    user_id: str,
+    usage: dict,
+) -> TtsInfo:
+    try:
+        if display_text:
+            try:
+                tts_result = await qwen_text_service.rewrite_tts_text(
+                    display_text,
+                    speech_language,
+                    display_language,
+                )
+            except TypeError:
+                tts_result = await qwen_text_service.rewrite_tts_text(display_text, speech_language)
+        else:
+            tts_result = None
+        tts_text = tts_result.text if tts_result and tts_result.text else display_text
+        if tts_result:
+            usage["tts_rewrite"] = tts_result.usage
+    except httpx.HTTPError as exc:
+        logger.warning(
+            "chat_policy tts_rewrite_fallback user_id=%s display_length=%s error_type=%s",
+            user_id,
+            len(display_text),
+            type(exc).__name__,
+        )
+        tts_text = display_text
+
+    tts_audio_url = None
+    tts_cached = False
+    tts_voice = settings.tts_default_voice
+    if tts_text:
+        try:
+            tts_audio = await tts_service.synthesize(text=tts_text, language=speech_language)
+            tts_audio_url = tts_audio.audio_url
+            tts_cached = tts_audio.cached
+            tts_voice = tts_audio.voice
+            usage["tts_synthesis"] = {
+                "cached": tts_audio.cached,
+                "audio_url": tts_audio.audio_url,
+                "voice": tts_audio.voice,
+            }
+        except (TtsSynthesisError, httpx.HTTPError) as exc:
+            logger.warning(
+                "chat_policy tts_synthesis_fallback user_id=%s tts_length=%s error_type=%s",
+                user_id,
+                len(tts_text),
+                type(exc).__name__,
+            )
+
+    return TtsInfo(
+        language=speech_language,
+        voice=tts_voice,
+        text=tts_text,
+        audio_url=tts_audio_url,
+        cached=tts_cached,
+    )
+
+
+def _response_json_for_rag_cache(response: ChatPolicyResponse) -> dict:
+    payload = response.model_dump(
+        exclude={"tts", "cache_hit", "cache_key_hash", "latency_ms", "source"},
+        mode="json",
+    )
+    usage = dict(payload.get("usage") or {})
+    usage.pop("tts_rewrite", None)
+    usage.pop("tts_synthesis", None)
+    payload["usage"] = usage
+    return payload
+
+
 @router.post("/chat-policy", response_model=ChatPolicyResponse)
 async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
     started_at = perf_counter()
@@ -29,6 +108,59 @@ async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
     original_text = req.message.strip()
     display_language = normalize_display_language(req.language)
     speech_language = normalize_speech_language(req.tts_language, display_language)
+    cache_key = rag_cache_service.build_key(
+        query=original_text,
+        display_language=display_language,
+        answer_mode=ANSWER_MODE_POLICY_CHAT,
+    )
+    cache_allowed = not should_skip_cache(original_text)
+
+    if cache_allowed:
+        try:
+            cached_entry = rag_cache_service.get(cache_key)
+        except Exception as exc:
+            logger.warning(
+                "chat_policy rag_cache_read_failed cache_key_hash=%s error_type=%s",
+                cache_key.cache_key_hash,
+                type(exc).__name__,
+            )
+            cached_entry = None
+        if cached_entry is not None:
+            response = ChatPolicyResponse.model_validate(cached_entry.response_json)
+            response.conversation_id = req.conversation_id or ""
+            response.original_text = original_text
+            response.search_query = original_text
+            response.usage = dict(response.usage)
+            response.usage["rag_cache"] = {
+                "cache_key_hash": cache_key.cache_key_hash,
+                "answer_mode": cache_key.answer_mode,
+                "prompt_version": cache_key.prompt_version,
+                "kb_version": cache_key.kb_version,
+            }
+            response.tts = await _build_tts_info(
+                display_text=response.display_text,
+                speech_language=speech_language,
+                display_language=display_language,
+                user_id=user_id,
+                usage=response.usage,
+            )
+            duration_ms = int((perf_counter() - started_at) * 1000)
+            response.cache_hit = True
+            response.cache_key_hash = cache_key.cache_key_hash
+            response.latency_ms = duration_ms
+            response.source = "rag_cache"
+            logger.info(
+                "chat_policy cache_hit=%s source=%s cache_key_hash=%s latency_ms=%s display_language=%s answer_mode=%s prompt_version=%s kb_version=%s",
+                True,
+                "rag_cache",
+                cache_key.cache_key_hash,
+                duration_ms,
+                display_language,
+                cache_key.answer_mode,
+                cache_key.prompt_version,
+                cache_key.kb_version,
+            )
+            return response
 
     try:
         query_result = await qwen_text_service.rewrite_query(original_text)
@@ -162,77 +294,53 @@ async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
             localization_result.usage.get("localization_error"),
         )
 
-    try:
-        if display_text:
-            try:
-                tts_result = await qwen_text_service.rewrite_tts_text(
-                    display_text,
-                    speech_language,
-                    display_language,
-                )
-            except TypeError:
-                tts_result = await qwen_text_service.rewrite_tts_text(display_text, speech_language)
-        else:
-            tts_result = None
-        tts_text = tts_result.text if tts_result and tts_result.text else display_text
-        if tts_result:
-            usage["tts_rewrite"] = tts_result.usage
-    except httpx.HTTPError as exc:
-        logger.warning(
-            "chat_policy tts_rewrite_fallback user_id=%s display_length=%s error_type=%s",
-            user_id,
-            len(display_text),
-            type(exc).__name__,
-        )
-        tts_text = display_text
-
-    tts_audio_url = None
-    tts_cached = False
-    tts_voice = settings.tts_default_voice
-    if tts_text:
-        try:
-            tts_audio = await tts_service.synthesize(text=tts_text, language=speech_language)
-            tts_audio_url = tts_audio.audio_url
-            tts_cached = tts_audio.cached
-            tts_voice = tts_audio.voice
-            usage["tts_synthesis"] = {
-                "cached": tts_audio.cached,
-                "audio_url": tts_audio.audio_url,
-                "voice": tts_audio.voice,
-            }
-        except (TtsSynthesisError, httpx.HTTPError) as exc:
-            logger.warning(
-                "chat_policy tts_synthesis_fallback user_id=%s tts_length=%s error_type=%s",
-                user_id,
-                len(tts_text),
-                type(exc).__name__,
-            )
-
-    duration_ms = int((perf_counter() - started_at) * 1000)
-    logger.info(
-        "chat_policy success duration_ms=%s user_id=%s message_length=%s search_query_length=%s answer_length=%s source_count=%s",
-        duration_ms,
-        user_id,
-        message_length,
-        len(search_query),
-        len(raw_answer),
-        len(sources),
+    tts_info = await _build_tts_info(
+        display_text=display_text,
+        speech_language=speech_language,
+        display_language=display_language,
+        user_id=user_id,
+        usage=usage,
     )
-
-    return ChatPolicyResponse(
+    duration_ms = int((perf_counter() - started_at) * 1000)
+    response = ChatPolicyResponse(
         answer=raw_answer,
         conversation_id=conversation_id,
         original_text=original_text,
         search_query=search_query,
         display_text=display_text,
         structured_answer=structured_answer,
-        tts=TtsInfo(
-            language=speech_language,
-            voice=tts_voice,
-            text=tts_text,
-            audio_url=tts_audio_url,
-            cached=tts_cached,
-        ),
+        tts=tts_info,
         sources=sources,
         usage=usage,
+        cache_hit=False,
+        cache_key_hash=cache_key.cache_key_hash,
+        latency_ms=duration_ms,
+        source="dify",
     )
+    if cache_allowed:
+        try:
+            rag_cache_service.set(cache_key, _response_json_for_rag_cache(response))
+        except Exception as exc:
+            logger.warning(
+                "chat_policy rag_cache_write_failed cache_key_hash=%s error_type=%s",
+                cache_key.cache_key_hash,
+                type(exc).__name__,
+            )
+
+    logger.info(
+        "chat_policy success duration_ms=%s user_id=%s message_length=%s search_query_length=%s answer_length=%s source_count=%s cache_hit=%s source=%s cache_key_hash=%s display_language=%s answer_mode=%s prompt_version=%s kb_version=%s",
+        duration_ms,
+        user_id,
+        message_length,
+        len(search_query),
+        len(raw_answer),
+        len(sources),
+        False,
+        "dify",
+        cache_key.cache_key_hash,
+        display_language,
+        cache_key.answer_mode,
+        cache_key.prompt_version,
+        cache_key.kb_version,
+    )
+    return response

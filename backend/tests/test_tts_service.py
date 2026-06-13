@@ -1,8 +1,10 @@
 import base64
 import json
 import shutil
+import sqlite3
 import unittest
 import uuid
+from contextlib import closing
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -11,6 +13,7 @@ import app.api.routes_chat as chat_routes
 import app.services.tts_service as tts_module
 from app.schemas.chat_schema import ChatPolicyRequest
 from app.services.qwen_text_service import TextGenerationResult
+from app.services.rag_cache_service import RagCacheService
 from app.services.tts_service import TtsService, TtsSynthesisError
 
 
@@ -187,6 +190,16 @@ class FailingStructuredLocalizationQwenService(FakeQwenService):
         raise chat_routes.httpx.HTTPError("structured localization unavailable")
 
 
+class QueryRewriteShouldNotRunQwenService(FakeQwenService):
+    async def rewrite_query(self, original_text: str) -> TextGenerationResult:
+        raise AssertionError("cache hit should not rewrite query")
+
+
+class DifyShouldNotRunService:
+    async def send_chat_message(self, message: str, conversation_id: str, user_id: str):
+        raise AssertionError("cache hit should not call Dify")
+
+
 class FakeDifyService:
     def __init__(self) -> None:
         self.messages = []
@@ -252,6 +265,13 @@ class FailingTtsService:
 
 
 class ChatPolicyTtsTest(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self) -> None:
+        self.original_rag_cache_enabled = chat_routes.settings.rag_cache_enabled
+        chat_routes.settings.rag_cache_enabled = False
+
+    async def asyncTearDown(self) -> None:
+        chat_routes.settings.rag_cache_enabled = self.original_rag_cache_enabled
+
     async def test_chat_policy_includes_tts_audio_url_when_synthesis_succeeds(self) -> None:
         fake_dify = FakeDifyService()
         with (
@@ -382,6 +402,71 @@ class ChatPolicyTtsTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.tts.text, "适合朗读的文本")
         self.assertIsNone(response.tts.audio_url)
         self.assertFalse(response.tts.cached)
+
+
+class ChatPolicyRagCacheTest(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self) -> None:
+        tmp_root = Path(__file__).resolve().parent / "tmp"
+        tmp_root.mkdir(parents=True, exist_ok=True)
+        self.temp_path = tmp_root / f"rag_cache_{uuid.uuid4().hex}.sqlite3"
+        self.original_cache_service = chat_routes.rag_cache_service
+        self.original_settings = {
+            "rag_cache_enabled": chat_routes.settings.rag_cache_enabled,
+            "rag_cache_ttl_seconds": chat_routes.settings.rag_cache_ttl_seconds,
+            "rag_prompt_version": chat_routes.settings.rag_prompt_version,
+            "rag_kb_version": chat_routes.settings.rag_kb_version,
+        }
+        chat_routes.rag_cache_service = RagCacheService(str(self.temp_path))
+        chat_routes.settings.rag_cache_enabled = True
+        chat_routes.settings.rag_cache_ttl_seconds = 86400
+        chat_routes.settings.rag_prompt_version = "prompt_test"
+        chat_routes.settings.rag_kb_version = "kb_test"
+
+    async def asyncTearDown(self) -> None:
+        chat_routes.rag_cache_service = self.original_cache_service
+        for name, value in self.original_settings.items():
+            setattr(chat_routes.settings, name, value)
+        if self.temp_path.exists():
+            self.temp_path.unlink()
+
+    async def test_second_identical_question_hits_cache_without_query_rewrite_or_dify(self) -> None:
+        fake_dify = FakeDifyService()
+        with (
+            patch.object(chat_routes, "qwen_text_service", FakeQwenService()),
+            patch.object(chat_routes, "dify_service", fake_dify),
+            patch.object(chat_routes, "tts_service", FakeTtsService()),
+        ):
+            first = await chat_routes.chat_policy(
+                ChatPolicyRequest(message="港澳通行证续签需要什么材料？", tts_language="zh-CN")
+            )
+
+        self.assertFalse(first.cache_hit)
+        self.assertEqual(first.source, "dify")
+        self.assertEqual(fake_dify.messages, ["港澳通行证续签需要什么材料？"])
+
+        with (
+            patch.object(chat_routes, "qwen_text_service", QueryRewriteShouldNotRunQwenService()),
+            patch.object(chat_routes, "dify_service", DifyShouldNotRunService()),
+            patch.object(chat_routes, "tts_service", FakeTtsService()),
+        ):
+            second = await chat_routes.chat_policy(
+                ChatPolicyRequest(message="港澳通行证续签需要什么材料？", tts_language="yue")
+            )
+
+        self.assertTrue(second.cache_hit)
+        self.assertEqual(second.source, "rag_cache")
+        self.assertEqual(second.answer, first.answer)
+        self.assertEqual(second.display_text, first.display_text)
+        self.assertEqual(second.cache_key_hash, first.cache_key_hash)
+        self.assertIsNotNone(second.latency_ms)
+
+        with closing(sqlite3.connect(self.temp_path)) as conn:
+            row = conn.execute("SELECT response_json FROM rag_cache").fetchone()
+        self.assertIsNotNone(row)
+        cached_payload = json.loads(row[0])
+        self.assertNotIn("tts", cached_payload)
+        self.assertNotIn("tts_rewrite", cached_payload["usage"])
+        self.assertNotIn("tts_synthesis", cached_payload["usage"])
 
 
 if __name__ == "__main__":
