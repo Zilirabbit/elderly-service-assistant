@@ -139,11 +139,13 @@ class FakeQwenService:
     def __init__(self) -> None:
         self.display_rewrite_calls = []
         self.structured_translation_calls = []
+        self.tts_rewrite_calls = []
 
     async def rewrite_query(self, original_text: str) -> TextGenerationResult:
         return TextGenerationResult(text="标准检索问题", usage={"tokens": 1}, request_id="query")
 
     async def rewrite_tts_text(self, display_text: str, target_language: str) -> TextGenerationResult:
+        self.tts_rewrite_calls.append((display_text, target_language))
         return TextGenerationResult(text="适合朗读的文本", usage={"tokens": 2}, request_id="tts")
 
     async def rewrite_display_text(self, source_text: str, target_language: str) -> TextGenerationResult:
@@ -193,6 +195,11 @@ class FailingStructuredLocalizationQwenService(FakeQwenService):
 class QueryRewriteShouldNotRunQwenService(FakeQwenService):
     async def rewrite_query(self, original_text: str) -> TextGenerationResult:
         raise AssertionError("cache hit should not rewrite query")
+
+
+class CacheHitShouldNotRunQwenService(QueryRewriteShouldNotRunQwenService):
+    async def rewrite_tts_text(self, display_text: str, target_language: str) -> TextGenerationResult:
+        raise AssertionError("cache hit should not rewrite TTS text")
 
 
 class DifyShouldNotRunService:
@@ -256,6 +263,25 @@ class FakeTtsService:
             voice="longxiaochun_v3",
             audio_url="/static/tts/audio.mp3",
             cached=False,
+        )
+
+
+class CacheAwareFakeTtsService:
+    def __init__(self) -> None:
+        self.keys = set()
+        self.calls = []
+
+    async def synthesize(self, text: str, language: str = "zh-CN", voice: str | None = None):
+        key = (text, language, voice)
+        cached = key in self.keys
+        self.keys.add(key)
+        self.calls.append(key)
+        return SimpleNamespace(
+            text=text,
+            language=language,
+            voice=voice or "longxiaochun_v3",
+            audio_url="/static/tts/audio.mp3",
+            cached=cached,
         )
 
 
@@ -430,11 +456,13 @@ class ChatPolicyRagCacheTest(unittest.IsolatedAsyncioTestCase):
             self.temp_path.unlink()
 
     async def test_second_identical_question_hits_cache_without_query_rewrite_or_dify(self) -> None:
+        fake_qwen = FakeQwenService()
         fake_dify = FakeDifyService()
+        fake_tts = CacheAwareFakeTtsService()
         with (
-            patch.object(chat_routes, "qwen_text_service", FakeQwenService()),
+            patch.object(chat_routes, "qwen_text_service", fake_qwen),
             patch.object(chat_routes, "dify_service", fake_dify),
-            patch.object(chat_routes, "tts_service", FakeTtsService()),
+            patch.object(chat_routes, "tts_service", fake_tts),
         ):
             first = await chat_routes.chat_policy(
                 ChatPolicyRequest(message="港澳通行证续签需要什么材料？", tts_language="zh-CN")
@@ -442,15 +470,20 @@ class ChatPolicyRagCacheTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(first.cache_hit)
         self.assertEqual(first.source, "dify")
+        self.assertEqual(len(fake_qwen.tts_rewrite_calls), 1)
+        self.assertEqual(first.usage["tts_text_source"], "generated")
+        self.assertFalse(first.usage["tts_rewrite_skipped"])
+        self.assertIsNotNone(first.usage["tts_text_hash"])
+        self.assertFalse(first.tts.cached)
         self.assertEqual(fake_dify.messages, ["港澳通行证续签需要什么材料？"])
 
         with (
-            patch.object(chat_routes, "qwen_text_service", QueryRewriteShouldNotRunQwenService()),
+            patch.object(chat_routes, "qwen_text_service", CacheHitShouldNotRunQwenService()),
             patch.object(chat_routes, "dify_service", DifyShouldNotRunService()),
-            patch.object(chat_routes, "tts_service", FakeTtsService()),
+            patch.object(chat_routes, "tts_service", fake_tts),
         ):
             second = await chat_routes.chat_policy(
-                ChatPolicyRequest(message="港澳通行证续签需要什么材料？", tts_language="yue")
+                ChatPolicyRequest(message="港澳通行证续签需要什么材料？", tts_language="zh-CN")
             )
 
         self.assertTrue(second.cache_hit)
@@ -459,14 +492,22 @@ class ChatPolicyRagCacheTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(second.display_text, first.display_text)
         self.assertEqual(second.cache_key_hash, first.cache_key_hash)
         self.assertIsNotNone(second.latency_ms)
+        self.assertEqual(second.usage["tts_text_source"], "rag_cache")
+        self.assertTrue(second.usage["tts_rewrite_skipped"])
+        self.assertEqual(second.usage["tts_text_hash"], first.usage["tts_text_hash"])
+        self.assertEqual(second.tts.text, first.tts.text)
+        self.assertTrue(second.tts.cached)
+        self.assertEqual(fake_tts.calls[0], fake_tts.calls[1])
 
         with closing(sqlite3.connect(self.temp_path)) as conn:
             row = conn.execute("SELECT response_json FROM rag_cache").fetchone()
         self.assertIsNotNone(row)
         cached_payload = json.loads(row[0])
+        self.assertEqual(cached_payload["tts_text"], first.tts.text)
         self.assertNotIn("tts", cached_payload)
         self.assertNotIn("tts_rewrite", cached_payload["usage"])
         self.assertNotIn("tts_synthesis", cached_payload["usage"])
+        self.assertNotIn("tts_text_hash", cached_payload["usage"])
 
 
 if __name__ == "__main__":

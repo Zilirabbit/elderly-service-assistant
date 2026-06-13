@@ -1,3 +1,4 @@
+import hashlib
 import logging
 from time import perf_counter
 
@@ -32,30 +33,46 @@ async def _build_tts_info(
     display_language: str,
     user_id: str,
     usage: dict,
+    cached_tts_text: str | None = None,
 ) -> TtsInfo:
-    try:
-        if display_text:
-            try:
-                tts_result = await qwen_text_service.rewrite_tts_text(
-                    display_text,
-                    speech_language,
-                    display_language,
-                )
-            except TypeError:
-                tts_result = await qwen_text_service.rewrite_tts_text(display_text, speech_language)
-        else:
-            tts_result = None
-        tts_text = tts_result.text if tts_result and tts_result.text else display_text
-        if tts_result:
-            usage["tts_rewrite"] = tts_result.usage
-    except httpx.HTTPError as exc:
-        logger.warning(
-            "chat_policy tts_rewrite_fallback user_id=%s display_length=%s error_type=%s",
-            user_id,
-            len(display_text),
-            type(exc).__name__,
-        )
-        tts_text = display_text
+    tts_started_at = perf_counter()
+    stable_cached_tts_text = (cached_tts_text or "").strip()
+    if stable_cached_tts_text:
+        tts_text = stable_cached_tts_text
+        usage["tts_text_source"] = "rag_cache"
+        usage["tts_rewrite_skipped"] = True
+    else:
+        usage["tts_text_source"] = "generated"
+        usage["tts_rewrite_skipped"] = False
+        try:
+            if display_text:
+                try:
+                    tts_result = await qwen_text_service.rewrite_tts_text(
+                        display_text,
+                        speech_language,
+                        display_language,
+                    )
+                except TypeError:
+                    tts_result = await qwen_text_service.rewrite_tts_text(display_text, speech_language)
+            else:
+                tts_result = None
+            tts_text = tts_result.text if tts_result and tts_result.text else display_text
+            if tts_result:
+                usage["tts_rewrite"] = tts_result.usage
+        except httpx.HTTPError as exc:
+            logger.warning(
+                "chat_policy tts_rewrite_fallback user_id=%s display_length=%s error_type=%s",
+                user_id,
+                len(display_text),
+                type(exc).__name__,
+            )
+            tts_text = display_text
+
+    normalized_tts_text = (tts_text or "").strip()
+    if normalized_tts_text:
+        usage["tts_text_hash"] = hashlib.sha256(normalized_tts_text.encode("utf-8")).hexdigest()[:12]
+    else:
+        usage["tts_text_hash"] = None
 
     tts_audio_url = None
     tts_cached = False
@@ -79,6 +96,8 @@ async def _build_tts_info(
                 type(exc).__name__,
             )
 
+    usage["tts_cached"] = tts_cached
+    usage["tts_latency_ms"] = int((perf_counter() - tts_started_at) * 1000)
     return TtsInfo(
         language=speech_language,
         voice=tts_voice,
@@ -96,7 +115,14 @@ def _response_json_for_rag_cache(response: ChatPolicyResponse) -> dict:
     usage = dict(payload.get("usage") or {})
     usage.pop("tts_rewrite", None)
     usage.pop("tts_synthesis", None)
+    usage.pop("tts_text_source", None)
+    usage.pop("tts_rewrite_skipped", None)
+    usage.pop("tts_text_hash", None)
+    usage.pop("tts_cached", None)
+    usage.pop("tts_latency_ms", None)
     payload["usage"] = usage
+    if response.tts and response.tts.text:
+        payload["tts_text"] = response.tts.text
     return payload
 
 
@@ -126,6 +152,7 @@ async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
             )
             cached_entry = None
         if cached_entry is not None:
+            cached_tts_text = cached_entry.response_json.get("tts_text")
             response = ChatPolicyResponse.model_validate(cached_entry.response_json)
             response.conversation_id = req.conversation_id or ""
             response.original_text = original_text
@@ -143,6 +170,7 @@ async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
                 display_language=display_language,
                 user_id=user_id,
                 usage=response.usage,
+                cached_tts_text=cached_tts_text,
             )
             duration_ms = int((perf_counter() - started_at) * 1000)
             response.cache_hit = True
@@ -150,7 +178,7 @@ async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
             response.latency_ms = duration_ms
             response.source = "rag_cache"
             logger.info(
-                "chat_policy cache_hit=%s source=%s cache_key_hash=%s latency_ms=%s display_language=%s answer_mode=%s prompt_version=%s kb_version=%s",
+                "chat_policy cache_hit=%s source=%s cache_key_hash=%s latency_ms=%s display_language=%s answer_mode=%s prompt_version=%s kb_version=%s tts_text_source=%s tts_rewrite_skipped=%s tts_text_hash=%s tts_cached=%s tts_latency_ms=%s",
                 True,
                 "rag_cache",
                 cache_key.cache_key_hash,
@@ -159,6 +187,11 @@ async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
                 cache_key.answer_mode,
                 cache_key.prompt_version,
                 cache_key.kb_version,
+                response.usage.get("tts_text_source"),
+                response.usage.get("tts_rewrite_skipped"),
+                response.usage.get("tts_text_hash"),
+                response.usage.get("tts_cached"),
+                response.usage.get("tts_latency_ms"),
             )
             return response
 
@@ -328,7 +361,7 @@ async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
             )
 
     logger.info(
-        "chat_policy success duration_ms=%s user_id=%s message_length=%s search_query_length=%s answer_length=%s source_count=%s cache_hit=%s source=%s cache_key_hash=%s display_language=%s answer_mode=%s prompt_version=%s kb_version=%s",
+        "chat_policy success duration_ms=%s user_id=%s message_length=%s search_query_length=%s answer_length=%s source_count=%s cache_hit=%s source=%s cache_key_hash=%s display_language=%s answer_mode=%s prompt_version=%s kb_version=%s tts_text_source=%s tts_rewrite_skipped=%s tts_text_hash=%s tts_cached=%s tts_latency_ms=%s",
         duration_ms,
         user_id,
         message_length,
@@ -342,5 +375,10 @@ async def chat_policy(req: ChatPolicyRequest) -> ChatPolicyResponse:
         cache_key.answer_mode,
         cache_key.prompt_version,
         cache_key.kb_version,
+        response.usage.get("tts_text_source"),
+        response.usage.get("tts_rewrite_skipped"),
+        response.usage.get("tts_text_hash"),
+        response.usage.get("tts_cached"),
+        response.usage.get("tts_latency_ms"),
     )
     return response
