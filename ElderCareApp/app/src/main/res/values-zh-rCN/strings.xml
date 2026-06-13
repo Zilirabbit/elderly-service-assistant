@@ -17,6 +17,7 @@
     <string name="common_material_list">材料清单</string>
     <string name="common_loading_materials">正在加载材料清单，请稍候...</string>
     <string name="common_retry_reload">重新加载</string>
+    <string name="common_back">返回</string>
     <string name="home_hero_title">您好，我来帮您办事</string>
     <string name="home_hero_desc">查政策、看材料、问流程，都可以直接提问。</string>
     <string name="home_ask">点击提问</string>
@@ -75,6 +76,12 @@
     <string name="qa_read_stop">停止朗读</string>
     <string name="qa_read_answer">朗读回答</string>
     <string name="qa_continue">继续追问</string>
+    <string name="faq_detail_short_answer">简短答案</string>
+    <string name="faq_detail_tips">注意事项</string>
+    <string name="faq_detail_empty_answer">此问题可继续咨询智能助手获取个性化说明。</string>
+    <string name="faq_detail_source_note">更新：%1$s。%2$s</string>
+    <string name="faq_detail_missing_title">没有找到这条常见问题</string>
+    <string name="faq_detail_missing_body">可能是本地 FAQ 数据正在更新。请返回首页后重新选择问题。</string>
     <string name="service_guidance_title">港澳通行证 / 签注办理判断</string>
     <string name="service_guidance_desc">回答 5 个问题，先判断自己该办哪一种</string>
     <string name="service_guidance_action">我不知道该办哪种</string>

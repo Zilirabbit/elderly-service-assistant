@@ -171,6 +171,7 @@ private enum class MainTab {
 
 private enum class OverlayScreen {
     PortDetail,
+    FaqDetail,
     Guide,
     Guidance,
     CrossBorderPreparePicker,
@@ -794,6 +795,7 @@ fun ElderCareAppRoot(modifier: Modifier = Modifier) {
     var overlayScreen by remember { mutableStateOf<OverlayScreen?>(null) }
     var activeChecklistId by remember { mutableStateOf<String?>(null) }
     var checklistBackTarget by remember { mutableStateOf<OverlayScreen?>(null) }
+    var activeFaqId by remember { mutableStateOf<String?>(null) }
     var activeElderCareInstitutionId by remember { mutableStateOf("shenzhen_nursing_home") }
     var selectedFont by remember { mutableStateOf(fontChoices[2]) }
     var speechPreference by remember { mutableStateOf(AppLanguageResolver.SpeechLanguagePreference.AUTO) }
@@ -816,6 +818,7 @@ fun ElderCareAppRoot(modifier: Modifier = Modifier) {
             overlayScreen = null
             activeChecklistId = null
             checklistBackTarget = null
+            activeFaqId = null
             materialViewModel.closeChecklist()
         } else {
             currentTab = MainTab.Home
@@ -838,6 +841,7 @@ fun ElderCareAppRoot(modifier: Modifier = Modifier) {
                 overlayScreen = null
                 activeChecklistId = null
                 checklistBackTarget = null
+                activeFaqId = null
                 activeElderCareInstitutionId = "shenzhen_nursing_home"
                 materialViewModel.closeChecklist()
             }
@@ -887,6 +891,36 @@ fun ElderCareAppRoot(modifier: Modifier = Modifier) {
                         },
                         onOpenMaterialList = { openMaterialChecklist("border_crossing_prepare", null) }
                     )
+
+                    OverlayScreen.FaqDetail -> {
+                        val activeFaq = faqItems.firstOrNull { it.id == activeFaqId }
+                        if (activeFaq == null) {
+                            FaqDetailFallbackScreen(
+                                modifier = rootModifier,
+                                onBack = closeOverlay
+                            )
+                        } else {
+                            FaqDetailScreen(
+                                modifier = rootModifier,
+                                faqItem = activeFaq,
+                                displayLanguage = displayLanguageCode,
+                                onBack = closeOverlay,
+                                onContinueAsk = { question ->
+                                    overlayScreen = null
+                                    activeChecklistId = null
+                                    checklistBackTarget = null
+                                    activeFaqId = null
+                                    currentTab = MainTab.Chat
+                                    chatViewModel.submitPrefilledQuestion(
+                                        question,
+                                        inputType = "faq_follow_up",
+                                        displayLanguage = displayLanguageCode,
+                                        speechLanguage = resolvedSpeechLanguage
+                                    )
+                                }
+                            )
+                        }
+                    }
 
                     OverlayScreen.Guide -> GuideScreen(
                         modifier = rootModifier,
@@ -1006,14 +1040,9 @@ fun ElderCareAppRoot(modifier: Modifier = Modifier) {
                             onOpenMaterialList = openMaterialList,
                             speechPreference = speechPreference,
                             onSpeechPreferenceChange = { speechPreference = it },
-                            onFaqClick = { question ->
-                                chatViewModel.submitPrefilledQuestion(
-                                    question,
-                                    inputType = "text",
-                                    displayLanguage = displayLanguageCode,
-                                    speechLanguage = resolvedSpeechLanguage
-                                )
-                                currentTab = MainTab.Chat
+                            onFaqClick = { faqItem ->
+                                activeFaqId = faqItem.id
+                                overlayScreen = OverlayScreen.FaqDetail
                             }
                         )
 
@@ -1056,7 +1085,7 @@ private fun HomeScreen(
     onOpenMaterialList: () -> Unit,
     speechPreference: AppLanguageResolver.SpeechLanguagePreference,
     onSpeechPreferenceChange: (AppLanguageResolver.SpeechLanguagePreference) -> Unit,
-    onFaqClick: (String) -> Unit,
+    onFaqClick: (FaqItem) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -1204,6 +1233,172 @@ private fun HomeScreen(
             onCategorySelected = { faqCategory = it },
             onQuestionClick = onFaqClick
         )
+    }
+}
+
+@Composable
+private fun FaqDetailScreen(
+    faqItem: FaqItem,
+    displayLanguage: String,
+    onBack: () -> Unit,
+    onContinueAsk: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val responsive = LocalElderResponsive.current
+    val shortAnswer = faqItem.shortAnswerFor(displayLanguage).ifBlank { stringResource(R.string.faq_detail_empty_answer) }
+    val tips = faqItem.tipsFor(displayLanguage)
+    val sourceNote = faqItem.sourceNoteFor(displayLanguage)
+    val followUpQuestion = faqItem.followUpQuestionFor(displayLanguage)
+
+    ScreenColumn(
+        modifier = modifier,
+        topBar = {
+            UnifiedTopBar(
+                title = stringResource(R.string.home_faq),
+                showBack = true,
+                leadingIcon = Icons.Filled.ArrowBack,
+                onBack = onBack,
+                elevated = true
+            )
+        }
+    ) {
+        Text(
+            text = stringResource(faqItem.titleResId),
+            color = ElderText,
+            fontSize = responsive.sectionTitle,
+            fontWeight = FontWeight.Bold,
+            lineHeight = responsive.sectionTitle * 1.25
+        )
+
+        SoftCard(containerColor = ElderBlueSoft, borderColor = Color(0xFFBFD8FF), elevation = 0.dp) {
+            Column(
+                modifier = Modifier.padding(responsive.cardSpacing),
+                verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)
+                ) {
+                    IconBadge(icon = Icons.Filled.Info, tint = ElderBlue, background = Color.White, size = responsive.iconSmall + 14.dp)
+                    Text(
+                        text = stringResource(R.string.faq_detail_short_answer),
+                        color = ElderBlueDark,
+                        fontSize = responsive.cardTitle,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Text(
+                    text = shortAnswer,
+                    color = ElderText,
+                    fontSize = responsive.bodyLarge,
+                    lineHeight = responsive.bodyLarge * 1.35
+                )
+            }
+        }
+
+        faqItem.answerSections.forEach { section ->
+            FaqAnswerSectionCard(section = section, displayLanguage = displayLanguage)
+        }
+
+        if (tips.isNotEmpty()) {
+            SoftCard(containerColor = Color.White, borderColor = ElderLine, elevation = 0.dp) {
+                Column(
+                    modifier = Modifier.padding(responsive.cardSpacing),
+                    verticalArrangement = Arrangement.spacedBy(responsive.rowSpacing)
+                ) {
+                    Text(
+                        text = stringResource(R.string.faq_detail_tips),
+                        color = ElderText,
+                        fontSize = responsive.cardTitle,
+                        fontWeight = FontWeight.Bold
+                    )
+                    tips.forEach { tip ->
+                        ReminderRow(text = tip)
+                    }
+                }
+            }
+        }
+
+        NoticeCard(text = stringResource(R.string.faq_detail_source_note, faqItem.updatedAt, sourceNote))
+
+        PrimaryActionButton(
+            text = stringResource(R.string.qa_continue),
+            icon = Icons.Filled.Send,
+            onClick = { onContinueAsk(followUpQuestion) },
+            height = 58.dp
+        )
+    }
+}
+
+@Composable
+private fun FaqAnswerSectionCard(section: FaqAnswerSection, displayLanguage: String) {
+    val responsive = LocalElderResponsive.current
+    SoftCard(containerColor = Color.White, borderColor = ElderLine, elevation = 0.dp) {
+        Column(
+            modifier = Modifier.padding(responsive.cardSpacing),
+            verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)
+        ) {
+            Text(
+                text = section.titleFor(displayLanguage),
+                color = ElderText,
+                fontSize = responsive.cardTitle,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = section.contentFor(displayLanguage),
+                color = ElderTextMuted,
+                fontSize = responsive.bodyLarge,
+                lineHeight = responsive.bodyLarge * 1.35
+            )
+        }
+    }
+}
+
+@Composable
+private fun FaqDetailFallbackScreen(
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val responsive = LocalElderResponsive.current
+    ScreenColumn(
+        modifier = modifier,
+        topBar = {
+            UnifiedTopBar(
+                title = stringResource(R.string.home_faq),
+                showBack = true,
+                leadingIcon = Icons.Filled.ArrowBack,
+                onBack = onBack,
+                elevated = true
+            )
+        }
+    ) {
+        SoftCard(containerColor = Color.White, borderColor = ElderLine, elevation = 0.dp) {
+            Column(
+                modifier = Modifier.padding(responsive.cardSpacing),
+                verticalArrangement = Arrangement.spacedBy(responsive.rowSpacing),
+                horizontalAlignment = Alignment.Start
+            ) {
+                IconBadge(icon = Icons.Filled.Warning, tint = ElderOrange, background = ElderOrangeSoft, size = responsive.iconLarge)
+                Text(
+                    text = stringResource(R.string.faq_detail_missing_title),
+                    color = ElderText,
+                    fontSize = responsive.cardTitle,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = stringResource(R.string.faq_detail_missing_body),
+                    color = ElderTextMuted,
+                    fontSize = responsive.bodyLarge,
+                    lineHeight = responsive.bodyLarge * 1.35
+                )
+                SecondaryActionButton(
+                    text = stringResource(R.string.common_back),
+                    icon = Icons.Filled.ArrowBack,
+                    onClick = onBack,
+                    height = 52.dp
+                )
+            }
+        }
     }
 }
 
@@ -1412,12 +1607,14 @@ private fun ChatScreen(
                 if (item.openGuidance) {
                     onOpenGuidance()
                 } else {
+                    val displayQuestion = context.getString(item.labelResId)
                     speech.stop()
                     chatViewModel.submitPrefilledQuestion(
                         item.question,
                         inputType = "quick",
                         displayLanguage = displayLanguage,
                         speechLanguage = speechLanguage,
+                        displayQuestion = displayQuestion,
                         uiStrings = uiStrings
                     )
                 }
@@ -1441,13 +1638,15 @@ private fun ChatScreen(
             if (uiState.messages.isEmpty() && !uiState.isLoading && !uiState.isTranscribing && uiState.errorMessage.isNullOrBlank()) {
                 QaEmptyState(
                     examples = qaEmptyExamples,
-                    onExampleClick = { question ->
+                    onExampleClick = { example ->
+                        val displayQuestion = context.getString(example.labelResId)
                         speech.stop()
                         chatViewModel.submitPrefilledQuestion(
-                            question,
+                            example.question,
                             inputType = "example",
                             displayLanguage = displayLanguage,
                             speechLanguage = speechLanguage,
+                            displayQuestion = displayQuestion,
                             uiStrings = uiStrings
                         )
                     },
@@ -3739,7 +3938,7 @@ private fun PortSummaryCard(port: PortInfo, onClick: () -> Unit) {
 private fun FaqSection(
     selectedCategory: String,
     onCategorySelected: (String) -> Unit,
-    onQuestionClick: (String) -> Unit
+    onQuestionClick: (FaqItem) -> Unit
 ) {
     val responsive = LocalElderResponsive.current
     var isExpanded by remember(selectedCategory) { mutableStateOf(false) }
@@ -3763,7 +3962,7 @@ private fun FaqSection(
     }
     Column(verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)) {
         visibleItems.forEach { item ->
-            SoftCard(modifier = Modifier.clickable { onQuestionClick(item.query) }, elevation = 0.dp) {
+            SoftCard(modifier = Modifier.clickable { onQuestionClick(item) }, elevation = 0.dp) {
                 Row(
                     modifier = Modifier.padding(horizontal = responsive.cardSpacing, vertical = responsive.rowSpacing),
                     verticalAlignment = Alignment.CenterVertically,
@@ -3861,7 +4060,7 @@ private fun QaChip(
 @Composable
 private fun QaEmptyState(
     examples: List<QaEmptyExample>,
-    onExampleClick: (String) -> Unit,
+    onExampleClick: (QaEmptyExample) -> Unit,
     onGuidanceClick: () -> Unit
 ) {
     val responsive = LocalElderResponsive.current
@@ -3894,7 +4093,7 @@ private fun QaEmptyState(
                 SecondaryActionButton(
                     text = stringResource(example.labelResId),
                     icon = Icons.Filled.KeyboardArrowRight,
-                    onClick = { onExampleClick(example.question) },
+                    onClick = { onExampleClick(example) },
                     height = 52.dp
                 )
             }

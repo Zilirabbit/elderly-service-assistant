@@ -19,6 +19,7 @@
     <string name="common_material_list">Materials</string>
     <string name="common_loading_materials">Loading material checklist...</string>
     <string name="common_retry_reload">Reload</string>
+    <string name="common_back">Back</string>
     <string name="common_cancel">Cancel</string>
     <string name="home_hero_title">Hi, I can help with your errands</string>
     <string name="home_hero_desc">Ask about policies, materials, and procedures directly.</string>
@@ -187,6 +188,12 @@
     <string name="faq_category_medical">Healthcare</string>
     <string name="faq_expand_more">Show more</string>
     <string name="faq_collapse">Collapse</string>
+    <string name="faq_detail_short_answer">Short answer</string>
+    <string name="faq_detail_tips">Things to note</string>
+    <string name="faq_detail_empty_answer">You can ask the assistant for more personalized guidance on this question.</string>
+    <string name="faq_detail_source_note">Updated: %1$s. %2$s</string>
+    <string name="faq_detail_missing_title">This FAQ was not found</string>
+    <string name="faq_detail_missing_body">The local FAQ data may be updating. Please go back to Home and choose the question again.</string>
     <string name="faq_q_apply_hk_macau_pass">How do I apply for a Hong Kong and Macao permit?</string>
     <string name="faq_q_expired_hk_macau_pass">What if my Hong Kong and Macao permit expired?</string>
     <string name="faq_q_elder_pass_materials">What materials do older adults need for a Hong Kong and Macao permit?</string>

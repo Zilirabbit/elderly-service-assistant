@@ -19,6 +19,7 @@
     <string name="common_material_list">材料清單</string>
     <string name="common_loading_materials">正在載入材料清單，請稍候...</string>
     <string name="common_retry_reload">重新載入</string>
+    <string name="common_back">返回</string>
     <string name="common_cancel">取消</string>
     <string name="home_hero_title">您好，我來幫您辦事</string>
     <string name="home_hero_desc">查政策、看材料、問流程，都可以直接提問。</string>
@@ -187,6 +188,12 @@
     <string name="faq_category_medical">醫療健康</string>
     <string name="faq_expand_more">展開更多</string>
     <string name="faq_collapse">收起</string>
+    <string name="faq_detail_short_answer">簡短答案</string>
+    <string name="faq_detail_tips">注意事項</string>
+    <string name="faq_detail_empty_answer">此問題可繼續諮詢智能助手，取得個人化說明。</string>
+    <string name="faq_detail_source_note">更新：%1$s。%2$s</string>
+    <string name="faq_detail_missing_title">找不到這條常見問題</string>
+    <string name="faq_detail_missing_body">本地 FAQ 資料可能正在更新。請返回首頁後重新選擇問題。</string>
     <string name="faq_q_apply_hk_macau_pass">如何申請港澳通行證？</string>
     <string name="faq_q_expired_hk_macau_pass">港澳通行證過期了怎麼辦？</string>
     <string name="faq_q_elder_pass_materials">長者辦理港澳通行證需要甚麼材料？</string>

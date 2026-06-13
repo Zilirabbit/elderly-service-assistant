@@ -153,6 +153,7 @@ class ChatViewModel : ViewModel() {
         inputType: String = "guidance",
         displayLanguage: String = "zh-CN",
         speechLanguage: String = "zh-CN",
+        displayQuestion: String = question,
         uiStrings: ChatUiStrings = ChatUiStrings(),
     ) {
         val cleanedQuestion = question.trim()
@@ -166,6 +167,7 @@ class ChatViewModel : ViewModel() {
             inputType = inputType,
             displayLanguage = displayLanguage,
             speechLanguage = speechLanguage,
+            displayQuestionOverride = displayQuestion,
             uiStrings = uiStrings
         )
     }
@@ -175,6 +177,7 @@ class ChatViewModel : ViewModel() {
         displayLanguage: String = "zh-CN",
         speechLanguage: String = "zh-CN",
         questionOverride: String? = null,
+        displayQuestionOverride: String? = null,
         uiStrings: ChatUiStrings = ChatUiStrings(),
     ) {
         val question = questionOverride?.trim() ?: _uiState.value.input.trim()
@@ -182,11 +185,12 @@ class ChatViewModel : ViewModel() {
             _uiState.value = _uiState.value.copy(errorMessage = uiStrings.emptyQuestionError)
             return
         }
+        val displayQuestion = displayQuestionOverride?.trim()?.takeIf { it.isNotEmpty() } ?: question
 
         val userMessage = ChatMessageUi(
             id = nextMessageId(),
             role = ChatMessageRole.User,
-            text = question
+            text = displayQuestion
         )
         val messagesWithUser = _uiState.value.messages + userMessage
 
@@ -195,7 +199,7 @@ class ChatViewModel : ViewModel() {
             answer = "",
             answerUiModel = null,
             messages = messagesWithUser,
-            lastQuestion = question,
+            lastQuestion = displayQuestion,
             sourceDocuments = emptyList(),
             voiceDraft = null,
             lastVoiceSampleName = "",
@@ -228,7 +232,7 @@ class ChatViewModel : ViewModel() {
                         input = "",
                         answer = "",
                         answerUiModel = null,
-                        lastQuestion = question,
+                        lastQuestion = displayQuestion,
                         sourceDocuments = emptyList(),
                         voiceDraft = null,
                         ttsText = "",
@@ -263,7 +267,7 @@ class ChatViewModel : ViewModel() {
                     answerUiModel = answerUiModel,
                     messages = updatedMessages,
                     conversationId = response.conversation_id.orEmpty(),
-                    lastQuestion = question,
+                    lastQuestion = displayQuestion,
                     sourceDocuments = sourceDocuments,
                     voiceDraft = null,
                     ttsText = cleanMarkdownAnswer(response.tts?.text?.takeIf { it.isNotBlank() } ?: cleanedAnswer),
@@ -273,7 +277,7 @@ class ChatViewModel : ViewModel() {
                 )
                 _uiState.value = nextState
                 saveSuccessfulHistoryItem(
-                    question = question,
+                    question = displayQuestion,
                     messages = updatedMessages,
                     conversationId = response.conversation_id.orEmpty(),
                     inputType = inputType,
