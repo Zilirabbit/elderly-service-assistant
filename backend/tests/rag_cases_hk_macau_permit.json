@@ -1,0 +1,32 @@
+[
+  {
+    "id": "permit_endorsement_type_001",
+    "group": "签注类型",
+    "query": "G签和L签有什么区别？",
+    "expected_branch": "政务办事",
+    "expected_title_keywords": ["G签", "L签"],
+    "expected_keywords": ["个人旅游", "团队旅游", "签注"],
+    "forbidden_keywords": ["回乡证"],
+    "required_json": true
+  },
+  {
+    "id": "permit_fee_time_001",
+    "group": "费用和时限",
+    "query": "办理港澳通行证多少钱？",
+    "expected_branch": "政务办事",
+    "expected_title_keywords": ["港澳通行证"],
+    "expected_keywords": ["60元", "15元"],
+    "forbidden_keywords": ["回乡证"],
+    "required_json": true
+  },
+  {
+    "id": "permit_endorsement_type_004",
+    "group": "签注类型",
+    "query": "商务签注可以停留多久？",
+    "expected_branch": "政务办事",
+    "expected_title_keywords": ["商务", "签注"],
+    "expected_keywords": ["商务", "14天"],
+    "forbidden_keywords": ["回乡证"],
+    "required_json": true
+  }
+]

@@ -12,6 +12,11 @@ from unittest.mock import patch
 import app.api.routes_chat as chat_routes
 import app.services.tts_service as tts_module
 from app.schemas.chat_schema import ChatPolicyRequest
+from app.services.language_service import (
+    normalize_display_language,
+    normalize_speech_language,
+    tts_language_instruction,
+)
 from app.services.qwen_text_service import TextGenerationResult
 from app.services.rag_cache_service import RagCacheService
 from app.services.tts_service import TtsService, TtsSynthesisError
@@ -242,7 +247,7 @@ class FakeStructuredDifyService:
               },
               "warnings": ["以当地出入境管理部门最新要求为准"],
               "detail_text": "建议先确认户籍地或居住地办理要求，再准备材料前往办理。",
-              "source_note": "资料依据：知识库中的相关官方指南/政策说明",
+              "source_note": "资料依据：知识库中的相关指南和整理资料",
               "confidence": "medium",
               "need_human_reminder": true
             }
@@ -353,7 +358,7 @@ class ChatPolicyTtsTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.conversation_id, "conversation-structured")
 
     async def test_chat_policy_translates_structured_fields_for_non_simplified_languages(self) -> None:
-        for display_language in ("zh-HK", "en"):
+        for display_language in ("zh-HK", "en", "zh-Hant-HK", "en-US"):
             with self.subTest(display_language=display_language):
                 fake_qwen = FakeQwenService()
                 with (
@@ -367,17 +372,30 @@ class ChatPolicyTtsTest(unittest.IsolatedAsyncioTestCase):
 
                 self.assertEqual(fake_qwen.display_rewrite_calls, [])
                 self.assertEqual(len(fake_qwen.structured_translation_calls), 1)
-                self.assertEqual(fake_qwen.structured_translation_calls[0][1], display_language)
+                expected_language = normalize_display_language(display_language)
+                self.assertEqual(fake_qwen.structured_translation_calls[0][1], expected_language)
                 self.assertNotIn("display_rewrite", response.usage)
-                self.assertEqual(response.usage["display_language"], display_language)
+                self.assertEqual(response.usage["display_language"], expected_language)
                 self.assertTrue(response.usage["display_localized"])
                 self.assertEqual(response.usage["localization_mode"], "structured_field_translation")
                 self.assertIn('"title"', response.answer)
                 self.assertIn("首次办理港澳通行证", response.answer)
-                self.assertEqual(response.display_text, f"{display_language} localized detail")
-                self.assertEqual(response.structured_answer.title, f"{display_language} localized title")
-                self.assertEqual(response.structured_answer.steps, [f"{display_language} localized step"])
-                self.assertEqual(response.structured_answer.materials.required, [f"{display_language} localized material"])
+                self.assertEqual(response.display_text, f"{expected_language} localized detail")
+                self.assertEqual(response.structured_answer.title, f"{expected_language} localized title")
+                self.assertEqual(response.structured_answer.steps, [f"{expected_language} localized step"])
+                self.assertEqual(response.structured_answer.materials.required, [f"{expected_language} localized material"])
+
+    def test_language_normalization_accepts_system_locale_tags(self) -> None:
+        self.assertEqual(normalize_display_language("en-US"), "en")
+        self.assertEqual(normalize_display_language("en_GB"), "en")
+        self.assertEqual(normalize_display_language("zh-Hant-HK"), "zh-HK")
+        self.assertEqual(normalize_display_language("zh-TW"), "zh-HK")
+        self.assertEqual(normalize_display_language("zh-Hans-CN"), "zh-CN")
+
+        self.assertEqual(normalize_speech_language("auto", "en-US"), "en")
+        self.assertEqual(normalize_speech_language(None, "zh-Hant-HK"), "zh-CN")
+        self.assertEqual(normalize_speech_language("en-GB", "zh-CN"), "en")
+        self.assertIn("繁體中文", tts_language_instruction("zh-CN", "zh-Hant-HK"))
 
     async def test_chat_policy_falls_back_when_structured_localization_fails(self) -> None:
         fake_qwen = FailingStructuredLocalizationQwenService()

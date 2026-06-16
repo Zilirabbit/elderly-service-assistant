@@ -789,6 +789,117 @@ private fun buildGuidanceResult(profile: GuidanceProfile): GuidanceResult {
     }
 }
 
+private fun isEnglishDisplayLanguage(displayLanguage: String): Boolean {
+    return displayLanguage.equals("en", ignoreCase = true) || displayLanguage.startsWith("en-", ignoreCase = true)
+}
+
+private fun GuidanceQuestion.displayTitle(displayLanguage: String): String {
+    if (!isEnglishDisplayLanguage(displayLanguage)) return title
+    return when (field) {
+        GuidanceField.HasPass -> "Do you currently have a Hong Kong and Macao permit?"
+        GuidanceField.PassValid -> "Is your Hong Kong and Macao permit still valid?"
+        GuidanceField.ApplyType -> "What do you want to handle this time?"
+        GuidanceField.Destination -> "Where do you want to go?"
+        GuidanceField.Purpose -> "What is the purpose of your trip?"
+    }
+}
+
+private fun guidanceOptionDisplayText(option: String, displayLanguage: String): String {
+    if (!isEnglishDisplayLanguage(displayLanguage)) return option
+    return when (option) {
+        "有" -> "Yes"
+        "没有" -> "No"
+        "不清楚" -> "Not sure"
+        "在有效期内" -> "Still valid"
+        "已经过期" -> "Expired"
+        "不知道怎么看" -> "Not sure how to check"
+        "第一次办理" -> "First application"
+        "签注过期或用完" -> "Endorsement expired or used up"
+        "通行证过期" -> "Permit expired"
+        "通行证丢了或坏了" -> "Permit lost or damaged"
+        "不确定" -> "Not sure"
+        "其他情况" -> "Other"
+        "香港" -> "Hong Kong"
+        "澳门" -> "Macao"
+        "香港和澳门都去" -> "Both Hong Kong and Macao"
+        "还没确定" -> "Not decided yet"
+        "旅游" -> "Travel"
+        "探亲" -> "Family visit"
+        "商务" -> "Business"
+        "学习工作逗留" -> "Study/work stay"
+        else -> option
+    }
+}
+
+private fun GuidanceResult.forDisplayLanguage(displayLanguage: String): GuidanceResult {
+    if (!isEnglishDisplayLanguage(displayLanguage)) return this
+    val noticeText = "This is an auxiliary suggestion. Please follow the local exit-entry authority or service window requirements."
+    return when {
+        caseType.contains("是否已有港澳通行证") -> copy(
+            caseType = "Information is incomplete. First confirm whether you already have a Hong Kong and Macao permit",
+            recommendedAction = "First check whether you have already applied for a Hong Kong and Macao permit, or bring your ID card to the exit-entry service window and ask staff to confirm. After that, decide whether this is a first application, replacement, or endorsement service.",
+            windowScript = "I am not sure whether I have applied for a Hong Kong and Macao permit before. Could you help me check which service I should handle now?",
+            notice = noticeText
+        )
+
+        caseType.contains("通行证有效期") -> copy(
+            caseType = "Information is incomplete. First confirm whether your permit is still valid",
+            recommendedAction = "Check the expiry date on the personal information page of your permit, and also check the destination, number of uses, and validity period on the endorsement page. If you are not sure, bring your ID card and permit to the service window for confirmation.",
+            windowScript = "I have a Hong Kong and Macao permit, but I am not sure whether it is still valid or whether the endorsement can still be used. Could you help me confirm which service I should handle?",
+            notice = noticeText
+        )
+
+        caseType.contains("首次办理") -> copy(
+            caseType = "First application for a Hong Kong and Macao permit and endorsement",
+            recommendedAction = "You usually need to apply in person at the exit-entry service window. Prepare your ID card and photo receipt in advance, and confirm whether a local appointment is required.",
+            windowScript = "I would like to apply for a Hong Kong and Macao permit and endorsement for the first time. Should I take a queue number first, or take photos and fill in the form first?",
+            notice = noticeText
+        )
+
+        caseType.contains("换发港澳通行证") -> copy(
+            caseType = "Replace an expired Hong Kong and Macao permit",
+            recommendedAction = "Handle this as a permit replacement first. Usually you should bring your ID card, original Hong Kong and Macao permit, and photo materials. After the replacement, handle the endorsement needed for your trip.",
+            windowScript = "My Hong Kong and Macao permit has expired. Should I replace the permit first, or can I handle the endorsement at the same time?",
+            notice = noticeText
+        )
+
+        caseType.contains("补发") || caseType.contains("丢") || caseType.contains("坏") -> copy(
+            caseType = "Reissue or replace a Hong Kong and Macao permit",
+            recommendedAction = "If the permit is lost, damaged, or unclear, go directly to the exit-entry service window for reissue or replacement and provide any explanation materials requested there.",
+            windowScript = "My Hong Kong and Macao permit was lost or damaged. Do I need a reissue or replacement, and what materials should I prepare?",
+            notice = noticeText
+        )
+
+        caseType.contains("还需要确认") || caseType.contains("办理事项") -> copy(
+            caseType = "The service type still needs confirmation",
+            recommendedAction = "Bring your ID card and Hong Kong and Macao permit to the service window. Ask staff to first check the permit and endorsement status, then confirm whether you need an endorsement, replacement, reissue, or another service.",
+            windowScript = "I have a Hong Kong and Macao permit, but I am not sure whether I should handle an endorsement, replacement, or another service. Could you help me check the permit and endorsement status?",
+            notice = noticeText
+        )
+
+        caseType.contains("非旅游类签注") -> copy(
+            caseType = "Non-travel endorsement",
+            recommendedAction = "Non-travel endorsements may require extra proof, such as invitation, family relationship, business, study, or work materials. It is best to ask at the service window before preparing documents.",
+            windowScript = "I would like to apply for a non-travel endorsement. Does this endorsement require extra supporting materials?",
+            notice = noticeText
+        )
+
+        caseType.contains("再次办理") || caseType.contains("签注") -> copy(
+            caseType = "Renew or reapply for an endorsement",
+            recommendedAction = "Your permit direction appears to be endorsement renewal or reapplication. Confirm the destination and endorsement type first, then follow the local self-service machine, online, or service window process.",
+            windowScript = "My Hong Kong and Macao permit is still valid, but the endorsement has expired or been used up. Could you help me confirm which endorsement I should apply for?",
+            notice = noticeText
+        )
+
+        else -> copy(
+            caseType = "Hong Kong and Macao permit or endorsement consultation",
+            recommendedAction = "Bring your ID card and Hong Kong and Macao permit. First confirm the permit validity, endorsement destination, and number of uses, then follow the service window or self-service equipment instructions.",
+            windowScript = "I would like to handle a Hong Kong and Macao permit or endorsement service. Could you help me confirm which service applies?",
+            notice = noticeText
+        )
+    }
+}
+
 @Composable
 fun ElderCareAppRoot(modifier: Modifier = Modifier) {
     var currentTab by remember { mutableStateOf(MainTab.Home) }
@@ -805,6 +916,7 @@ fun ElderCareAppRoot(modifier: Modifier = Modifier) {
     val displayLanguage = currentDisplayLanguage()
     val displayLanguageCode = displayLanguage.apiCode
     val resolvedSpeechLanguage = AppLanguageResolver.resolveSpeechLanguage(speechPreference, displayLanguage)
+    val uiStrings = chatUiStrings()
 
     BackHandler(enabled = overlayScreen != null || currentTab != MainTab.Home) {
         if (overlayScreen == OverlayScreen.ElderCareInstitutionDetail) {
@@ -915,7 +1027,8 @@ fun ElderCareAppRoot(modifier: Modifier = Modifier) {
                                         question,
                                         inputType = "faq_follow_up",
                                         displayLanguage = displayLanguageCode,
-                                        speechLanguage = resolvedSpeechLanguage
+                                        speechLanguage = resolvedSpeechLanguage,
+                                        uiStrings = uiStrings
                                     )
                                 }
                             )
@@ -933,6 +1046,7 @@ fun ElderCareAppRoot(modifier: Modifier = Modifier) {
                     OverlayScreen.Guidance -> GuidanceScreen(
                         modifier = rootModifier,
                         chatViewModel = chatViewModel,
+                        displayLanguage = displayLanguageCode,
                         speechLanguage = resolvedSpeechLanguage,
                         onBack = closeOverlay,
                         onOpenMaterialList = { checklistId -> openMaterialChecklist(checklistId, null) },
@@ -945,7 +1059,8 @@ fun ElderCareAppRoot(modifier: Modifier = Modifier) {
                                 standardQuestion,
                                 inputType = "guidance",
                                 displayLanguage = displayLanguageCode,
-                                speechLanguage = resolvedSpeechLanguage
+                                speechLanguage = resolvedSpeechLanguage,
+                                uiStrings = uiStrings
                             )
                         }
                     )
@@ -2412,6 +2527,7 @@ private fun CrossBorderPreparePickerScreen(
 @Composable
 private fun GuidanceScreen(
     chatViewModel: ChatViewModel,
+    displayLanguage: String,
     speechLanguage: String,
     onBack: () -> Unit,
     onOpenMaterialList: (String) -> Unit,
@@ -2424,11 +2540,24 @@ private fun GuidanceScreen(
     var profile by remember { mutableStateOf(GuidanceProfile()) }
     var result by remember { mutableStateOf<GuidanceResult?>(null) }
     val visibleQuestions = profile.visibleGuidanceQuestions()
+    val isEnglish = isEnglishDisplayLanguage(displayLanguage)
     val readAllText = buildString {
-        append("办理情况问卷。请按当前页面的问题回答，我们帮您判断该怎么办。")
+        append(
+            if (isEnglish) {
+                "Service guidance. Please answer the questions shown on this page, and we will help you find the right next step."
+            } else {
+                "办理情况问卷。请按当前页面的问题回答，我们帮您判断该怎么办。"
+            }
+        )
         visibleQuestions.forEachIndexed { index, question ->
-            append("第${index + 1}题。${question.title}。")
-            append("选项有：${question.options.joinToString("，")}。")
+            val questionTitle = question.displayTitle(displayLanguage)
+            val optionsText = question.options.joinToString(if (isEnglish) ", " else "，") { guidanceOptionDisplayText(it, displayLanguage) }
+            if (isEnglish) {
+                append(" Question ${index + 1}. $questionTitle. Options: $optionsText.")
+            } else {
+                append("第${index + 1}题。$questionTitle。")
+                append("选项有：$optionsText。")
+            }
         }
     }
     val readAllActive = speech.isActiveTarget(SpeechTargetGuidance)
@@ -2437,7 +2566,7 @@ private fun GuidanceScreen(
         modifier = modifier,
         topBar = {
             UnifiedTopBar(
-                title = "办理情况判断",
+                title = stringResource(R.string.guidance_screen_title),
                 showBack = true,
                 onBack = {
                     speech.stop()
@@ -2457,20 +2586,20 @@ private fun GuidanceScreen(
                     IconBadge(icon = Icons.Filled.Search, size = responsive.iconMedium)
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)) {
                         Text(
-                            text = "按步骤回答几个问题",
+                            text = stringResource(R.string.guidance_intro_title),
                             color = ElderText,
                             fontSize = responsive.cardTitle,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "后面的问题会根据您的选择自动出现",
+                            text = stringResource(R.string.guidance_intro_desc),
                             color = ElderTextMuted,
                             fontSize = responsive.body
                         )
                     }
                 }
                 SecondaryActionButton(
-                    text = if (readAllActive) "停止朗读" else "朗读全部",
+                    text = stringResource(if (readAllActive) R.string.guidance_stop_reading else R.string.guidance_read_all),
                     icon = if (readAllActive) Icons.Filled.Stop else Icons.Filled.VolumeUp,
                     onClick = {
                         if (readAllActive) {
@@ -2489,13 +2618,20 @@ private fun GuidanceScreen(
             GuidanceQuestionCard(
                 index = index + 1,
                 question = question,
+                displayLanguage = displayLanguage,
                 selected = profile.answerFor(question.field),
                 isReading = speech.isActiveTarget(target),
                 onRead = {
                     if (speech.isActiveTarget(target)) {
                         speech.stop()
                     } else {
-                        val text = "第${index + 1}题。${question.title}。选项有：${question.options.joinToString("，")}。"
+                        val questionTitle = question.displayTitle(displayLanguage)
+                        val optionsText = question.options.joinToString(if (isEnglish) ", " else "，") { guidanceOptionDisplayText(it, displayLanguage) }
+                        val text = if (isEnglish) {
+                            "Question ${index + 1}. $questionTitle. Options: $optionsText."
+                        } else {
+                            "第${index + 1}题。$questionTitle。选项有：$optionsText。"
+                        }
                         speech.speak(text, target, null, speechLanguage)
                     }
                 },
@@ -2507,12 +2643,12 @@ private fun GuidanceScreen(
         }
 
         PrimaryActionButton(
-            text = "看看我该怎么办",
+            text = stringResource(R.string.guidance_check_result),
             icon = Icons.Filled.Check,
             onClick = {
                 val missingCount = profile.missingCount(visibleQuestions)
                 if (missingCount > 0) {
-                    Toast.makeText(context, "还有 $missingCount 个问题没选", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.guidance_missing_answer_toast, missingCount), Toast.LENGTH_SHORT).show()
                 } else {
                     result = buildGuidanceResult(profile)
                 }
@@ -2523,6 +2659,7 @@ private fun GuidanceScreen(
         result?.let { guidanceResult ->
             GuidanceResultCard(
                 result = guidanceResult,
+                displayLanguage = displayLanguage,
                 onOpenDetailedPolicy = { onOpenDetailedPolicy(guidanceResult.standardQuestion) },
                 onRestart = {
                     speech.stop()
@@ -2539,6 +2676,7 @@ private fun GuidanceScreen(
 private fun GuidanceQuestionCard(
     index: Int,
     question: GuidanceQuestion,
+    displayLanguage: String,
     selected: String,
     isReading: Boolean,
     onRead: () -> Unit,
@@ -2560,7 +2698,7 @@ private fun GuidanceQuestionCard(
                     Text(index.toString(), color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
                 }
                 Text(
-                    text = question.title,
+                    text = question.displayTitle(displayLanguage),
                     color = ElderText,
                     fontSize = responsive.cardTitle,
                     fontWeight = FontWeight.Bold,
@@ -2577,7 +2715,7 @@ private fun GuidanceQuestionCard(
                 Row(horizontalArrangement = Arrangement.spacedBy(responsive.rowSpacing)) {
                     rowOptions.forEach { option ->
                         GuidanceOptionButton(
-                            text = option,
+                            text = guidanceOptionDisplayText(option, displayLanguage),
                             selected = option == selected,
                             onClick = { onSelected(option) },
                             modifier = Modifier.weight(1f)
@@ -2610,12 +2748,12 @@ private fun GuidanceSpeechButton(
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(responsive.smallSpacing)) {
             Icon(
                 imageVector = if (active) Icons.Filled.Stop else Icons.Filled.VolumeUp,
-                contentDescription = if (active) "停止朗读" else "朗读题目",
+                contentDescription = stringResource(if (active) R.string.guidance_stop_reading else R.string.guidance_read_question),
                 tint = ElderBlue,
                 modifier = Modifier.size(responsive.iconSmall)
             )
             Text(
-                text = if (active) "停止" else "朗读",
+                text = stringResource(if (active) R.string.guidance_read_stop_short else R.string.guidance_read_short),
                 color = ElderBlue,
                 fontSize = responsive.labelSmall,
                 fontWeight = FontWeight.Bold,
@@ -2657,11 +2795,13 @@ private fun GuidanceOptionButton(
 @Composable
 private fun GuidanceResultCard(
     result: GuidanceResult,
+    displayLanguage: String,
     onOpenDetailedPolicy: () -> Unit,
     onRestart: () -> Unit,
     onOpenMaterialList: () -> Unit
 ) {
     val responsive = LocalElderResponsive.current
+    val displayResult = result.forDisplayLanguage(displayLanguage)
     SoftCard(containerColor = ElderGreenSoft, borderColor = Color(0xFFBFE6CA)) {
         Column(modifier = Modifier.padding(responsive.cardPadding), verticalArrangement = Arrangement.spacedBy(responsive.cardSpacing)) {
             Row(
@@ -2671,12 +2811,12 @@ private fun GuidanceResultCard(
                 IconBadge(icon = Icons.Filled.Check, tint = ElderGreen, background = Color.White, size = responsive.iconMedium)
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(responsive.smallSpacing)) {
                     Text(
-                        text = "您的情况可能是",
+                        text = stringResource(R.string.guidance_result_label),
                         color = ElderTextMuted,
                         fontSize = responsive.label
                     )
                     Text(
-                        text = result.caseType,
+                        text = displayResult.caseType,
                         color = ElderText,
                         fontSize = responsive.cardTitle,
                         fontWeight = FontWeight.Bold
@@ -2684,9 +2824,9 @@ private fun GuidanceResultCard(
                 }
             }
 
-            GuidanceTextBlock(title = "推荐下一步", body = result.recommendedAction)
-            GuidanceTextBlock(title = "给工作人员看的说明", body = result.windowScript)
-            GuidanceNoticeBlock(text = result.notice)
+            GuidanceTextBlock(title = stringResource(R.string.guidance_next_step), body = displayResult.recommendedAction)
+            GuidanceTextBlock(title = stringResource(R.string.guidance_window_script), body = displayResult.windowScript)
+            GuidanceNoticeBlock(text = displayResult.notice)
 
             PrimaryActionButton(
                 text = stringResource(R.string.guidance_view_policy),
@@ -3057,7 +3197,7 @@ private fun FontSizeScreen(
         modifier = modifier.safeDrawingPadding(),
         topBar = {
             UnifiedTopBar(
-                title = "字体设置",
+                title = stringResource(R.string.font_settings_title),
                 showBack = true,
                 leadingIcon = Icons.Filled.ArrowBack,
                 onBack = onBack,
@@ -3066,7 +3206,7 @@ private fun FontSizeScreen(
         }
     ) {
         Text(
-            text = "请选择适合您的字体大小",
+            text = stringResource(R.string.font_settings_desc),
             color = ElderTextMuted,
             fontSize = responsive.bodyLarge
         )
@@ -3086,7 +3226,7 @@ private fun FontSizeScreen(
                 }
             }
         }
-        NoticeCard(text = "返回后，页面文字会保持您选择的大小。")
+        NoticeCard(text = stringResource(R.string.font_settings_notice))
     }
 }
 
@@ -4198,7 +4338,7 @@ private fun AssistantStructuredAnswerCard(
 private fun QaConclusionBox(conclusion: String) {
     val responsive = LocalElderResponsive.current
     var expanded by remember(conclusion) { mutableStateOf(false) }
-    val canExpand = conclusion.length > 96
+    var canExpand by remember(conclusion) { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -4219,13 +4359,27 @@ private fun QaConclusionBox(conclusion: String) {
             fontSize = responsive.bodyLarge,
             fontWeight = FontWeight.Bold,
             maxLines = if (expanded) Int.MAX_VALUE else 3,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
+            onTextLayout = { layoutResult ->
+                if (!expanded) {
+                    canExpand = layoutResult.hasVisualOverflow
+                }
+            }
         )
         if (canExpand) {
-            SecondaryMiniButton(
-                text = stringResource(if (expanded) R.string.qa_collapse_conclusion else R.string.qa_expand_conclusion),
-                onClick = { expanded = !expanded }
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                Icon(
+                    imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                    contentDescription = stringResource(if (expanded) R.string.qa_collapse_conclusion else R.string.qa_expand_conclusion),
+                    tint = ElderBlue,
+                    modifier = Modifier
+                        .size(responsive.iconMedium)
+                        .clickable { expanded = !expanded }
+                )
+            }
         }
     }
 }
@@ -5055,7 +5209,7 @@ private fun FontChoiceCard(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = choice.sample,
+                    text = stringResource(fontChoiceSampleRes(choice)),
                     color = if (selected) ElderBlue else ElderText,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold
@@ -5063,12 +5217,30 @@ private fun FontChoiceCard(
             }
             Spacer(modifier = Modifier.height(responsive.rowSpacing))
             Text(
-                text = choice.label,
+                text = stringResource(fontChoiceLabelRes(choice)),
                 color = if (selected) Color.White else ElderText,
                 fontSize = responsive.cardTitle,
                 fontWeight = FontWeight.Bold
             )
         }
+    }
+}
+
+@StringRes
+private fun fontChoiceLabelRes(choice: FontChoice): Int {
+    return when (choice.scale) {
+        0.95f -> R.string.font_size_small
+        1.0f -> R.string.font_size_medium
+        else -> R.string.font_size_large
+    }
+}
+
+@StringRes
+private fun fontChoiceSampleRes(choice: FontChoice): Int {
+    return when (choice.scale) {
+        0.95f -> R.string.font_size_small_sample
+        1.0f -> R.string.font_size_medium_sample
+        else -> R.string.font_size_large_sample
     }
 }
 

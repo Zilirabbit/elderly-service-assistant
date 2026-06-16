@@ -1,0 +1,516 @@
+{
+  "summary": {
+    "total": 3,
+    "passed": 3,
+    "failed": 0,
+    "cache_hit_count": 0,
+    "dify_live_count": 3,
+    "base_url": "http://127.0.0.1:8080",
+    "cache_cleared": true,
+    "bypass_cache": false
+  },
+  "results": [
+    {
+      "case": {
+        "id": "permit_endorsement_type_001",
+        "group": "签注类型",
+        "query": "G签和L签有什么区别？",
+        "expected_branch": "政务办事",
+        "expected_title_keywords": [
+          "G签",
+          "L签"
+        ],
+        "expected_keywords": [
+          "个人旅游",
+          "团队旅游",
+          "签注"
+        ],
+        "forbidden_keywords": [
+          "回乡证"
+        ],
+        "required_json": true
+      },
+      "request_url": "http://127.0.0.1:8080/api/v1/chat-policy",
+      "request_body": {
+        "message": "G签和L签有什么区别？",
+        "conversation_id": "",
+        "user_id": "rag-live-test",
+        "input_type": "text",
+        "language": "zh-CN",
+        "tts_language": "zh-CN"
+      },
+      "effective_query": "G签和L签有什么区别？",
+      "http_status": 200,
+      "response_json": {
+        "answer": "{\n\"title\": \"G签与L签的区别说明\",\n\"summary\": \"目前实际操作中，持L签在绝大多数口岸可自行过关，无需跟团，体验与G签基本一致。但法律形式上L签仍属团队旅游，具体以口岸要求为准。\",\n\"scenario_options\": [\n\"确认户籍地是否开放G签\",\n\"咨询当地出入境管理部门\",\n\"了解最新通关政策\"\n],\n\"steps\": [\n\"确认您的户籍所在地政策\",\n\"查看通行证背面的签注类型\",\n\"直接持证前往口岸通关\",\n\"留意口岸现场指引标识\",\n\"如有疑问咨询12367热线\"\n],\n\"materials\": {\n\"required\": [],\n\"optional\": []\n},\n\"warnings\": [\n\"L签法律形式上仍为团队旅游签注\",\n\"具体通关要求以口岸及出入境部门说明为准\",\n\"建议出行前确认目的地最新入境政策\",\n\"具体要求以官方平台、12367或当地出入境管理部门最新要求为准\"\n],\n\"detail_text\": \"简单来说，G签是个人旅游签注，L签是团队旅游签注。过去L签需要跟团或由旅行社送关，但自2017年8月起，政策已优化。现在持L签的内地居民，在绝大多数口岸都可以像持G签一样，自行持证件刷卡过关，不需要再找旅行社买“送关服务”或必须跟随旅行团。不过，从证件性质上看，L签依然属于团队旅游类别。如果您担心个别特殊口岸或有临时政策调整，建议出发前通过国家移民管理局官方平台或拨打12367服务热线确认。\",\n\"source_note\": \"资料依据：知识库中的相关指南和整理资料\"\n}",
+        "conversation_id": "39a29198-e989-4594-b2fe-27621070a652",
+        "original_text": "G签和L签有什么区别？",
+        "search_query": "G签和L签有什么区别？",
+        "display_text": "简单来说，G签是个人旅游签注，L签是团队旅游签注。过去L签需要跟团或由旅行社送关，但自2017年8月起，政策已优化。现在持L签的内地居民，在绝大多数口岸都可以像持G签一样，自行持证件刷卡过关，不需要再找旅行社买“送关服务”或必须跟随旅行团。不过，从证件性质上看，L签依然属于团队旅游类别。如果您担心个别特殊口岸或有临时政策调整，建议出发前通过国家移民管理局官方平台或拨打12367服务热线确认。",
+        "structured_answer": {
+          "title": "G签与L签的区别说明",
+          "summary": "目前实际操作中，持L签在绝大多数口岸可自行过关，无需跟团，体验与G签基本一致。但法律形式上L签仍属团队旅游，具体以口岸要求为准。",
+          "scenario_options": [
+            "确认户籍地是否开放G签",
+            "咨询当地出入境管理部门",
+            "了解最新通关政策"
+          ],
+          "steps": [
+            "确认您的户籍所在地政策",
+            "查看通行证背面的签注类型",
+            "直接持证前往口岸通关",
+            "留意口岸现场指引标识",
+            "如有疑问咨询12367热线"
+          ],
+          "materials": {
+            "required": [],
+            "optional": []
+          },
+          "warnings": [
+            "L签法律形式上仍为团队旅游签注",
+            "具体通关要求以口岸及出入境部门说明为准",
+            "建议出行前确认目的地最新入境政策",
+            "具体要求以官方平台、12367或当地出入境管理部门最新要求为准"
+          ],
+          "detail_text": "简单来说，G签是个人旅游签注，L签是团队旅游签注。过去L签需要跟团或由旅行社送关，但自2017年8月起，政策已优化。现在持L签的内地居民，在绝大多数口岸都可以像持G签一样，自行持证件刷卡过关，不需要再找旅行社买“送关服务”或必须跟随旅行团。不过，从证件性质上看，L签依然属于团队旅游类别。如果您担心个别特殊口岸或有临时政策调整，建议出发前通过国家移民管理局官方平台或拨打12367服务热线确认。",
+          "source_note": "资料依据：知识库中的相关指南和整理资料",
+          "confidence": "medium",
+          "need_human_reminder": true
+        },
+        "tts": {
+          "language": "zh-CN",
+          "voice": "longxiaochun_v3",
+          "text": "G签是个人旅游签。  \nL签是团队旅游签。  \n以前L签必须跟团，或找旅行社送关。  \n但从2017年8月起，政策优化了。  \n现在持L签的内地居民，  \n在大多数口岸，  \n可以像持G签一样，  \n自己刷卡过关。  \n不用再买“送关服务”，  \n也不用非得跟旅行团。  \n不过L签的性质，  \n还是属于团队旅游签。  \n如果担心个别口岸有特殊要求，  \n出发前建议查国家移民管理局官网，  \n或拨打12367服务热线确认。",
+          "audio_url": "/static/tts/dab4ebc538879645dbb500910abe4d08f431f40cfb33dce2387675d34f8bd2a3.mp3",
+          "cached": false
+        },
+        "sources": [
+          {
+            "document_name": "政务办事_港澳通行证办理知识库.md",
+            "title": null,
+            "score": 0.7860498859861207,
+            "content": "知识条目：团队旅游签注L签说明\n- 条目ID：ga_permit_010\n- 知识类型：政务办事\n- 业务领域：港澳通行证/签注/续签/过关材料\n- 场景标签：L签、团队旅游签注、自行通关、旅游签注\n- 核心结论：团队旅游签注适用于所有内地居民，不受户籍限制。自2017年8月起，持L签旅客在绝大多数口岸可自行持证件过关，实际操作上与G签基本一致。",
+            "source_type": "knowledge_base"
+          },
+          {
+            "document_name": "政务办事_港澳通行证办理知识库.md",
+            "title": null,
+            "score": 0.7289975835342801,
+            "content": "知识条目：常见问题：L签是否必须跟团\n- 条目ID：ga_permit_030\n- 知识类型：政务办事\n- 业务领域：港澳通行证/签注/续签/过关材料\n- 场景标签：FAQ、L签、团队旅游、自行通关\n- 核心结论：资料说明，自2017年8月起，持L签旅客在绝大多数口岸可自行持证件过关，无需跟团行走，实际操作上与G签基本一致。",
+            "source_type": "knowledge_base"
+          },
+          {
+            "document_name": "政务办事_港澳通行证办理知识库.md",
+            "title": null,
+            "score": 0.6895309214710392,
+            "content": "注意事项\n- L签法律形式上仍为团队旅游签注，具体通关和办理要求以口岸及出入境部门说明为准。",
+            "source_type": "knowledge_base"
+          },
+          {
+            "document_name": "政务办事_港澳通行证办理知识库.md",
+            "title": null,
+            "score": 0.386787944468733,
+            "content": "可能问法\n- 团队旅游签注必须跟团吗？\n- L签可以自己过关吗？",
+            "source_type": "knowledge_base"
+          }
+        ],
+        "usage": {
+          "dify": {
+            "prompt_tokens": 3757,
+            "prompt_unit_price": "0.0008",
+            "prompt_price_unit": "0.001",
+            "prompt_price": "0.0030056",
+            "completion_tokens": 410,
+            "completion_unit_price": "0.0048",
+            "completion_price_unit": "0.001",
+            "completion_price": "0.0019680",
+            "total_tokens": 4167,
+            "total_price": "0.0049736",
+            "currency": "RMB",
+            "latency": 9.201,
+            "time_to_first_token": 3.486,
+            "time_to_generate": 6.697
+          },
+          "query_rewrite": {
+            "total_tokens": 143,
+            "completion_tokens": 8,
+            "prompt_tokens": 135,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "rewritten_search_query": "港澳通行证G签和L签的区别",
+          "dify_query": "G签和L签有什么区别？",
+          "display_language": "zh-CN",
+          "display_localized": false,
+          "localization_mode": "none",
+          "tts_text_source": "generated",
+          "tts_rewrite_skipped": false,
+          "tts_rewrite": {
+            "total_tokens": 434,
+            "completion_tokens": 134,
+            "prompt_tokens": 300,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "tts_text_hash": "954529d9a6a2",
+          "tts_synthesis": {
+            "cached": false,
+            "audio_url": "/static/tts/dab4ebc538879645dbb500910abe4d08f431f40cfb33dce2387675d34f8bd2a3.mp3",
+            "voice": "longxiaochun_v3"
+          },
+          "tts_cached": false,
+          "tts_latency_ms": 9841
+        },
+        "cache_hit": false,
+        "cache_key_hash": "35ab4343",
+        "latency_ms": 21520,
+        "source": "dify"
+      },
+      "response_text": null,
+      "passed": true,
+      "failures": [],
+      "elapsed_ms": 21611,
+      "cache_hit": false,
+      "source": "dify"
+    },
+    {
+      "case": {
+        "id": "permit_fee_time_001",
+        "group": "费用和时限",
+        "query": "办理港澳通行证多少钱？",
+        "expected_branch": "政务办事",
+        "expected_title_keywords": [
+          "港澳通行证"
+        ],
+        "expected_keywords": [
+          "60元",
+          "15元"
+        ],
+        "forbidden_keywords": [
+          "回乡证"
+        ],
+        "required_json": true
+      },
+      "request_url": "http://127.0.0.1:8080/api/v1/chat-policy",
+      "request_body": {
+        "message": "办理港澳通行证多少钱？",
+        "conversation_id": "",
+        "user_id": "rag-live-test",
+        "input_type": "text",
+        "language": "zh-CN",
+        "tts_language": "zh-CN"
+      },
+      "effective_query": "办理港澳通行证多少钱？",
+      "http_status": 200,
+      "response_json": {
+        "answer": "{\n\"title\": \"港澳通行证办理费用说明\",\n\"summary\": \"往来港澳通行证证件费为60元/证。签注费用根据类型不同另行计算，如一次有效签注15元/件。\",\n\"scenario_options\": [\n\"首次办理\",\n\"签注续签\",\n\"证件过期换发\",\n\"证件遗失补发\"\n],\n\"steps\": [\n\"准备居民身份证原件及照片回执\",\n\"前往出入境大厅或通过官方平台预约\",\n\"填写《中国公民出入境证件申请表》\",\n\"提交材料并缴纳证件费及签注费\",\n\"按回执日期领取证件或选择邮寄\"\n],\n\"materials\": {\n\"required\": [\n\"居民身份证原件\",\n\"符合标准的照片及回执\",\n\"《中国公民出入境证件申请表》\"\n],\n\"optional\": [\n\"未满16周岁需监护人陪同及监护证明\",\n\"登记备案国家工作人员需单位同意函\",\n\"军人需军人身份证明及单位同意证明\",\n\"异地办理可能需提供居住证\"\n]\n},\n\"warnings\": [\n\"签注费用按类型另计：一次15元，二次30元，短期多次80元\",\n\"长期多次签注费用按年限递增，具体以窗口核定为准\",\n\"以上费用仅供参考，实际收费以官方平台或当地出入境管理部门最新要求为准\",\n\"建议通过12367或当地公安出入境窗口确认最新收费标准\"\n],\n\"detail_text\": \"办理往来港澳通行证的证件费标准为60元/证。如果您需要同时办理签注，费用会另外计算：一次有效签注每件15元，二次有效签注每件30元，短期多次签注每件80元。长期多次签注的费用会根据年限有所不同。请注意，这些费用可能会随政策调整，建议在办理前通过官方渠道核实。\",\n\"source_note\": \"资料依据：知识库中的相关指南和整理资料\"\n}",
+        "conversation_id": "7b3bdc02-2593-4f67-99ce-190c6185fabe",
+        "original_text": "办理港澳通行证多少钱？",
+        "search_query": "办理港澳通行证多少钱？",
+        "display_text": "办理往来港澳通行证的证件费标准为60元/证。如果您需要同时办理签注，费用会另外计算：一次有效签注每件15元，二次有效签注每件30元，短期多次签注每件80元。长期多次签注的费用会根据年限有所不同。请注意，这些费用可能会随政策调整，建议在办理前通过官方渠道核实。",
+        "structured_answer": {
+          "title": "港澳通行证办理费用说明",
+          "summary": "往来港澳通行证证件费为60元/证。签注费用根据类型不同另行计算，如一次有效签注15元/件。",
+          "scenario_options": [
+            "首次办理",
+            "签注续签",
+            "证件过期换发",
+            "证件遗失补发"
+          ],
+          "steps": [
+            "准备居民身份证原件及照片回执",
+            "前往出入境大厅或通过官方平台预约",
+            "填写《中国公民出入境证件申请表》",
+            "提交材料并缴纳证件费及签注费",
+            "按回执日期领取证件或选择邮寄"
+          ],
+          "materials": {
+            "required": [
+              "居民身份证原件",
+              "符合标准的照片及回执",
+              "《中国公民出入境证件申请表》"
+            ],
+            "optional": [
+              "未满16周岁需监护人陪同及监护证明",
+              "登记备案国家工作人员需单位同意函",
+              "军人需军人身份证明及单位同意证明",
+              "异地办理可能需提供居住证"
+            ]
+          },
+          "warnings": [
+            "签注费用按类型另计：一次15元，二次30元，短期多次80元",
+            "长期多次签注费用按年限递增，具体以窗口核定为准",
+            "以上费用仅供参考，实际收费以官方平台或当地出入境管理部门最新要求为准",
+            "建议通过12367或当地公安出入境窗口确认最新收费标准"
+          ],
+          "detail_text": "办理往来港澳通行证的证件费标准为60元/证。如果您需要同时办理签注，费用会另外计算：一次有效签注每件15元，二次有效签注每件30元，短期多次签注每件80元。长期多次签注的费用会根据年限有所不同。请注意，这些费用可能会随政策调整，建议在办理前通过官方渠道核实。",
+          "source_note": "资料依据：知识库中的相关指南和整理资料",
+          "confidence": "medium",
+          "need_human_reminder": true
+        },
+        "tts": {
+          "language": "zh-CN",
+          "voice": "longxiaochun_v3",
+          "text": "往来港澳通行证，每本60元。  \n签注费用另算：  \n一次有效签注，每件15元；  \n二次有效签注，每件30元；  \n短期多次签注，每件80元；  \n长期多次签注，按年限收费。  \n费用可能调整，办理前请查官方最新消息。",
+          "audio_url": "/static/tts/610d236ec840ea014726dfd15aca5d848f384a4cffeb3bc62602e1ea9cf187fd.mp3",
+          "cached": false
+        },
+        "sources": [
+          {
+            "document_name": "政务办事_港澳通行证办理知识库.md",
+            "title": null,
+            "score": 0.8057007150772524,
+            "content": "知识条目：港澳通行证费用标准\n- 条目ID：ga_permit_025\n- 知识类型：政务办事\n- 业务领域：港澳通行证/签注/续签/过关材料\n- 场景标签：费用、证件费、签注费、特殊签注\n- 核心结论：往来港澳通行证证件费为60元/证。一次有效签注15元/件，二次有效签注30元/件，短期多次签注80元/件，长期多次签注费用按年限递增。",
+            "source_type": "knowledge_base"
+          },
+          {
+            "document_name": "政务办事_港澳通行证办理知识库.md",
+            "title": null,
+            "score": 0.7930187968363559,
+            "content": "费用\n往来港澳通行证证件费60元/证；签注费用按类型另计",
+            "source_type": "knowledge_base"
+          },
+          {
+            "document_name": "政务办事_港澳通行证办理知识库.md",
+            "title": null,
+            "score": 0.4630351675361917,
+            "content": "可能问法\n- 港澳通行证办理多少钱？\n- 港澳签注一次多少钱？\n- 一签多行多少钱？",
+            "source_type": "knowledge_base"
+          },
+          {
+            "document_name": "政务办事_港澳通行证办理知识库.md",
+            "title": null,
+            "score": 0.34694699936645335,
+            "content": "知识条目：通行证有效期与换发补发情形\n- 条目ID：ga_permit_028\n- 知识类型：政务办事\n- 业务领域：港澳通行证/签注/续签/过关材料\n- 场景标签：有效期、换发、补发、遗失、损毁\n- 核心结论：港澳通行证未满16周岁有效期为5年，16周岁及以上有效期为10年。有效期不足6个月、证件损毁、身份信息变更、指纹变化等可申请换发；遗失、被盗抢可申请补发。",
+            "source_type": "knowledge_base"
+          }
+        ],
+        "usage": {
+          "dify": {
+            "prompt_tokens": 3768,
+            "prompt_unit_price": "0.0008",
+            "prompt_price_unit": "0.001",
+            "prompt_price": "0.0030144",
+            "completion_tokens": 454,
+            "completion_unit_price": "0.0048",
+            "completion_price_unit": "0.001",
+            "completion_price": "0.0021792",
+            "total_tokens": 4222,
+            "total_price": "0.0051936",
+            "currency": "RMB",
+            "latency": 9.984,
+            "time_to_first_token": 3.785,
+            "time_to_generate": 7.557
+          },
+          "query_rewrite": {
+            "total_tokens": 139,
+            "completion_tokens": 7,
+            "prompt_tokens": 132,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "rewritten_search_query": "办理港澳通行证需要多少费用？",
+          "dify_query": "办理港澳通行证多少钱？",
+          "display_language": "zh-CN",
+          "display_localized": false,
+          "localization_mode": "none",
+          "tts_text_source": "generated",
+          "tts_rewrite_skipped": false,
+          "tts_rewrite": {
+            "total_tokens": 331,
+            "completion_tokens": 76,
+            "prompt_tokens": 255,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "tts_text_hash": "46d1f90aa655",
+          "tts_synthesis": {
+            "cached": false,
+            "audio_url": "/static/tts/610d236ec840ea014726dfd15aca5d848f384a4cffeb3bc62602e1ea9cf187fd.mp3",
+            "voice": "longxiaochun_v3"
+          },
+          "tts_cached": false,
+          "tts_latency_ms": 5861
+        },
+        "cache_hit": false,
+        "cache_key_hash": "2803401d",
+        "latency_ms": 18454,
+        "source": "dify"
+      },
+      "response_text": null,
+      "passed": true,
+      "failures": [],
+      "elapsed_ms": 18467,
+      "cache_hit": false,
+      "source": "dify"
+    },
+    {
+      "case": {
+        "id": "permit_endorsement_type_004",
+        "group": "签注类型",
+        "query": "商务签注可以停留多久？",
+        "expected_branch": "政务办事",
+        "expected_title_keywords": [
+          "商务",
+          "签注"
+        ],
+        "expected_keywords": [
+          "商务",
+          "14天"
+        ],
+        "forbidden_keywords": [
+          "回乡证"
+        ],
+        "required_json": true
+      },
+      "request_url": "http://127.0.0.1:8080/api/v1/chat-policy",
+      "request_body": {
+        "message": "商务签注可以停留多久？",
+        "conversation_id": "",
+        "user_id": "rag-live-test",
+        "input_type": "text",
+        "language": "zh-CN",
+        "tts_language": "zh-CN"
+      },
+      "effective_query": "商务签注可以停留多久？",
+      "http_status": 200,
+      "response_json": {
+        "answer": "{\n\"title\": \"商务签注停留时间说明\",\n\"summary\": \"自2024年5月6日起，持赴港澳商务签注在港澳地区停留期限已延长至14天。具体以签注页标注及官方最新政策为准。\",\n\"scenario_options\": [\n\"确认签注类型\",\n\"查询签注有效期\",\n\"咨询异地办理条件\"\n],\n\"steps\": [\n\"查看通行证内页签注信息\",\n\"确认签注类型为“商务”\",\n\"留意每次入境停留不超过14天\",\n\"确保在签注有效期内往返\",\n\"如有疑问拨打12367咨询\"\n],\n\"materials\": {\n\"required\": [],\n\"optional\": []\n},\n\"warnings\": [\n\"政策于2024年5月6日调整，请以最新官方要求为准\",\n\"停留期限指每次入境后可逗留的时间，非签注有效期\",\n\"具体执行标准建议咨询当地出入境管理部门或12367\",\n\"不要仅凭AI回答安排行程，务必核对证件实际签注内容\"\n],\n\"detail_text\": \"根据最新资料，自2024年5月6日起，赴港澳商务签注（S签）持有人在港澳地区的停留期限已由原来的7天延长至14天。这意味着您每次入境香港或澳门后，最多可以停留14天。请注意区分“签注有效期”（如3个月或1年）和“每次停留期限”。建议您出行前仔细检查通行证内的签注页，确认签注类型及有效日期，并严格遵守停留规定，以免逾期影响后续通关。\",\n\"source_note\": \"资料依据：知识库中的相关指南和整理资料\"\n}",
+        "conversation_id": "0e4576bb-7def-4ee6-9cb0-9596f7923cab",
+        "original_text": "商务签注可以停留多久？",
+        "search_query": "商务签注可以停留多久？",
+        "display_text": "根据最新资料，自2024年5月6日起，赴港澳商务签注（S签）持有人在港澳地区的停留期限已由原来的7天延长至14天。这意味着您每次入境香港或澳门后，最多可以停留14天。请注意区分“签注有效期”（如3个月或1年）和“每次停留期限”。建议您出行前仔细检查通行证内的签注页，确认签注类型及有效日期，并严格遵守停留规定，以免逾期影响后续通关。",
+        "structured_answer": {
+          "title": "商务签注停留时间说明",
+          "summary": "自2024年5月6日起，持赴港澳商务签注在港澳地区停留期限已延长至14天。具体以签注页标注及官方最新政策为准。",
+          "scenario_options": [
+            "确认签注类型",
+            "查询签注有效期",
+            "咨询异地办理条件"
+          ],
+          "steps": [
+            "查看通行证内页签注信息",
+            "确认签注类型为“商务”",
+            "留意每次入境停留不超过14天",
+            "确保在签注有效期内往返",
+            "如有疑问拨打12367咨询"
+          ],
+          "materials": {
+            "required": [],
+            "optional": []
+          },
+          "warnings": [
+            "政策于2024年5月6日调整，请以最新官方要求为准",
+            "停留期限指每次入境后可逗留的时间，非签注有效期",
+            "具体执行标准建议咨询当地出入境管理部门或12367",
+            "不要仅凭AI回答安排行程，务必核对证件实际签注内容"
+          ],
+          "detail_text": "根据最新资料，自2024年5月6日起，赴港澳商务签注（S签）持有人在港澳地区的停留期限已由原来的7天延长至14天。这意味着您每次入境香港或澳门后，最多可以停留14天。请注意区分“签注有效期”（如3个月或1年）和“每次停留期限”。建议您出行前仔细检查通行证内的签注页，确认签注类型及有效日期，并严格遵守停留规定，以免逾期影响后续通关。",
+          "source_note": "资料依据：知识库中的相关指南和整理资料",
+          "confidence": "medium",
+          "need_human_reminder": true
+        },
+        "tts": {
+          "language": "zh-CN",
+          "voice": "longxiaochun_v3",
+          "text": "最新消息：  \n从2024年5月6日起，  \n赴港澳商务签注（S签）的停留时间，  \n由原来的7天，延长到14天。  \n\n您每次入境香港或澳门，  \n最多可以停留14天。  \n\n注意区分两个概念：  \n一是签注有效期，比如3个月或1年；  \n二是每次能停留多久，就是这14天。  \n\n出行前，请一定查看通行证里的签注页，  \n确认签注类型和有效日期。  \n务必按时离境，  \n避免逾期，影响下次通关。",
+          "audio_url": "/static/tts/229bdb85ad11dd7a3649a238728a017f6b6f4431d4a8f8e81ddaf3cf235b5b59.mp3",
+          "cached": false
+        },
+        "sources": [
+          {
+            "document_name": "政务办事_港澳通行证办理知识库.md",
+            "title": null,
+            "score": 0.9357815471612411,
+            "content": "知识条目：常见问题：签注有效期与停留时间\n- 条目ID：ga_permit_031\n- 知识类型：政务办事\n- 业务领域：港澳通行证/签注/续签/过关材料\n- 场景标签：FAQ、签注有效期、停留时间、7天、14天、商务签注、旅游签注\n- 核心结论：签注有效期是指签注本身的有效期限，如3个月或1年；在有效期内可凭签注出入境。旅游签注每次入境后的停留时间通常不超过7天。商务签注不要直接套用旅游签注7天规则；资料显示，2024年5月6日起，赴港澳商务签注持有人停留期限由7天延长至14天。",
+            "source_type": "knowledge_base"
+          },
+          {
+            "document_name": "政务办事_港澳通行证办理知识库.md",
+            "title": null,
+            "score": 0.9324015852591381,
+            "content": "知识条目：商务签注可以停留多久\n- 条目ID：ga_permit_012_faq_stay\n- 知识类型：政务办事\n- 业务领域：港澳通行证/签注/商务签注/停留时间\n- 场景标签：商务签注、S签、停留多久、14天、2024年5月6日、港澳商务\n- 核心结论：商务签注（S签）适用于因商务活动需要赴港澳的人员。资料显示，2024年5月6日起，赴港澳商务签注持有人在港澳地区停留期限由7天延长至14天。",
+            "source_type": "knowledge_base"
+          },
+          {
+            "document_name": "政务办事_港澳通行证办理知识库.md",
+            "title": null,
+            "score": 0.9014559669030433,
+            "content": "办理时限 / 有效期\n- 商务签注种类包括：3个月一次、3个月多次、1年多次。\n- 2024年5月6日起，赴港澳商务签注持有人在港澳地区停留期限由7天延长至14天。",
+            "source_type": "knowledge_base"
+          },
+          {
+            "document_name": "政务办事_港澳通行证办理知识库.md",
+            "title": null,
+            "score": 0.8676180122185684,
+            "content": "办理时限 / 有效期\n签注有效期1年，每次逗留不超过7天",
+            "source_type": "knowledge_base"
+          }
+        ],
+        "usage": {
+          "dify": {
+            "prompt_tokens": 3860,
+            "prompt_unit_price": "0.0008",
+            "prompt_price_unit": "0.001",
+            "prompt_price": "0.0030880",
+            "completion_tokens": 413,
+            "completion_unit_price": "0.0048",
+            "completion_price_unit": "0.001",
+            "completion_price": "0.0019824",
+            "total_tokens": 4273,
+            "total_price": "0.0050704",
+            "currency": "RMB",
+            "latency": 9.552,
+            "time_to_first_token": 4.696,
+            "time_to_generate": 6.624
+          },
+          "query_rewrite": {
+            "total_tokens": 146,
+            "completion_tokens": 12,
+            "prompt_tokens": 134,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "rewritten_search_query": "商务签注允许停留的最长期限是多久？",
+          "dify_query": "商务签注可以停留多久？",
+          "display_language": "zh-CN",
+          "display_localized": false,
+          "localization_mode": "none",
+          "tts_text_source": "generated",
+          "tts_rewrite_skipped": false,
+          "tts_rewrite": {
+            "total_tokens": 402,
+            "completion_tokens": 124,
+            "prompt_tokens": 278,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "tts_text_hash": "4f1f8291541c",
+          "tts_synthesis": {
+            "cached": false,
+            "audio_url": "/static/tts/229bdb85ad11dd7a3649a238728a017f6b6f4431d4a8f8e81ddaf3cf235b5b59.mp3",
+            "voice": "longxiaochun_v3"
+          },
+          "tts_cached": false,
+          "tts_latency_ms": 9489
+        },
+        "cache_hit": false,
+        "cache_key_hash": "143f33b3",
+        "latency_ms": 22062,
+        "source": "dify"
+      },
+      "response_text": null,
+      "passed": true,
+      "failures": [],
+      "elapsed_ms": 22073,
+      "cache_hit": false,
+      "source": "dify"
+    }
+  ]
+}

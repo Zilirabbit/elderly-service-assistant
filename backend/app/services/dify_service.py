@@ -7,7 +7,7 @@ from app.config import settings
 from app.schemas.chat_schema import MaterialBlock, StructuredAnswer
 
 
-DEFAULT_SOURCE_NOTE = "资料依据：知识库中的相关官方指南/政策说明"
+DEFAULT_SOURCE_NOTE = "资料依据：知识库中的相关指南和整理资料"
 
 
 def _strip_json_text(text: str) -> str:

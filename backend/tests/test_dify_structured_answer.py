@@ -43,7 +43,7 @@ class StructuredAnswerParserTest(unittest.TestCase):
               },
               "warnings": ["以当地出入境管理部门最新要求为准"],
               "detail_text": "建议先准备身份证等材料，再按当地要求办理。",
-              "source_note": "资料依据：知识库中的相关官方指南/政策说明",
+              "source_note": "资料依据：知识库中的相关指南和整理资料",
               "confidence": "high",
               "need_human_reminder": true
             }
@@ -69,7 +69,7 @@ class StructuredAnswerParserTest(unittest.TestCase):
               "materials": {"required": [], "optional": []},
               "warnings": [],
               "detail_text": "请根据出行目的选择相应签注。",
-              "source_note": "资料依据：知识库中的相关官方指南/政策说明",
+              "source_note": "资料依据：知识库中的相关指南和整理资料",
               "confidence": "medium",
               "need_human_reminder": "false"
             }
@@ -88,6 +88,32 @@ class StructuredAnswerParserTest(unittest.TestCase):
         self.assertEqual(parsed.title, "查询结果")
         self.assertEqual(parsed.confidence, "low")
         self.assertEqual(parsed.detail_text, "这是普通文本，不是 JSON。")
+        self.assertTrue(parsed.need_human_reminder)
+
+    def test_parse_target_json_without_legacy_fields(self) -> None:
+        parsed = parse_structured_answer(
+            """
+            {
+              "title": "回乡证过期在内地换发指南",
+              "summary": "回乡证过期后，一般可以在内地申请换发，无需专门返回港澳。",
+              "scenario_options": ["正常换发（持旧证）", "证件遗失补发"],
+              "steps": ["通过12367APP或官方平台预约", "本人按时到场提交材料"],
+              "materials": {
+                "required": ["港澳永久居民身份证原件", "旧回乡证原件"],
+                "optional": ["监护人身份证及监护关系证明（未成年人适用）"]
+              },
+              "warnings": ["内地办理无加急服务，标准办理时限为7个工作日"],
+              "detail_text": "回乡证过期后，可以在内地县级以上公安机关出入境大厅申请换发。",
+              "source_note": "资料依据：知识库中的相关指南和整理资料"
+            }
+            """
+        )
+
+        self.assertEqual(parsed.title, "回乡证过期在内地换发指南")
+        self.assertEqual(parsed.materials.required, ["港澳永久居民身份证原件", "旧回乡证原件"])
+        self.assertEqual(parsed.materials.optional, ["监护人身份证及监护关系证明（未成年人适用）"])
+        self.assertEqual(parsed.source_note, "资料依据：知识库中的相关指南和整理资料")
+        self.assertEqual(parsed.confidence, "medium")
         self.assertTrue(parsed.need_human_reminder)
 
 

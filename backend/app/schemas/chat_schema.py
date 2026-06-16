@@ -41,7 +41,7 @@ class StructuredAnswer(BaseModel):
     materials: MaterialBlock = Field(default_factory=MaterialBlock)
     warnings: list[str] = Field(default_factory=list)
     detail_text: str = ""
-    source_note: str = "资料依据：知识库中的相关官方指南/政策说明"
+    source_note: str = "资料依据：知识库中的相关指南和整理资料"
     confidence: str = "medium"
     need_human_reminder: bool = True
 
