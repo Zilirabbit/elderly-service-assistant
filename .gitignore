@@ -41,3 +41,9 @@ demo-assets/apk/*
 
 # Packaged submission artifacts
 final_submission_docs.rar
+
+# Local-only project materials
+api-tests/
+deployment/
+dify-config/
+docs/
