@@ -181,7 +181,17 @@ private enum class OverlayScreen {
     MaterialList
 }
 
-private val voiceLanguageOptions = listOf("普通话", "方言", "英语")
+private enum class VoiceInputLanguageOption(@param:StringRes val labelResId: Int) {
+    Mandarin(R.string.speech_mandarin),
+    Cantonese(R.string.speech_cantonese),
+    English(R.string.speech_english)
+}
+
+private val voiceLanguageOptions = listOf(
+    VoiceInputLanguageOption.Mandarin,
+    VoiceInputLanguageOption.Cantonese,
+    VoiceInputLanguageOption.English
+)
 private const val AsrLanguageAuto = "auto"
 private const val SpeechTargetAnswer = "answer"
 private const val SpeechTargetVoiceDraft = "voice_draft"
@@ -246,22 +256,6 @@ private val qaEmptyExamples = listOf(
         question = "去香港过关要准备什么？"
     )
 )
-
-private fun voiceLanguageCode(label: String): String {
-    return when (label) {
-        "普通话" -> "zh"
-        "英语" -> "en"
-        else -> "auto"
-    }
-}
-
-private fun ttsLanguageCode(label: String): String {
-    return when (label) {
-        "英语" -> "en"
-        "方言" -> "yue"
-        else -> "zh-CN"
-    }
-}
 
 private fun speechPreferenceLabelRes(preference: AppLanguageResolver.SpeechLanguagePreference): Int {
     return when (preference) {
@@ -1535,7 +1529,7 @@ private fun ChatScreen(
     val voiceRecorder = remember { VoiceRecorder() }
     var showVoicePanel by remember { mutableStateOf(false) }
     var showHistorySheet by remember { mutableStateOf(false) }
-    var selectedVoiceLanguage by remember { mutableStateOf("普通话") }
+    var selectedVoiceLanguage by remember { mutableStateOf(VoiceInputLanguageOption.Mandarin) }
     var isRecording by remember { mutableStateOf(false) }
     var voicePanelMessage by remember { mutableStateOf<String?>(null) }
     val chatScrollState = rememberScrollState()
@@ -3060,11 +3054,11 @@ private fun GuideScreen(
     val speech = rememberCloudSpeechController(chatViewModel, speechLanguage)
     var stepIndex by remember { mutableIntStateOf(0) }
     val steps = listOf(
-        GuideStep(Icons.Filled.Email, "第 1 步：点击提问", "在首页点击“点击提问”，进入智能问答页面。"),
-        GuideStep(Icons.Filled.Edit, "第 2 步：说出或输入问题", "您可以直接输入文字，也可以点击麦克风说话。"),
-        GuideStep(Icons.Filled.Check, "第 3 步：确认识别文字", "如果使用语音提问，系统会先显示听到的文字，请确认无误后继续。"),
-        GuideStep(Icons.Filled.Search, "第 4 步：查看 AI 回答", "系统会根据政策知识库整理回答，并尽量用简单的话说明。"),
-        GuideStep(Icons.Filled.List, "第 5 步：保存或继续办理", "您可以查看材料清单、朗读回答，或请家人帮忙确认。")
+        GuideStep(Icons.Filled.Email, stringResource(R.string.guide_step_1_title), stringResource(R.string.guide_step_1_body)),
+        GuideStep(Icons.Filled.Edit, stringResource(R.string.guide_step_2_title), stringResource(R.string.guide_step_2_body)),
+        GuideStep(Icons.Filled.Check, stringResource(R.string.guide_step_3_title), stringResource(R.string.guide_step_3_body)),
+        GuideStep(Icons.Filled.Search, stringResource(R.string.guide_step_4_title), stringResource(R.string.guide_step_4_body)),
+        GuideStep(Icons.Filled.List, stringResource(R.string.guide_step_5_title), stringResource(R.string.guide_step_5_body))
     )
     val current = steps[stepIndex]
     val guideText = "${current.title}。${current.body}"
@@ -3076,7 +3070,7 @@ private fun GuideScreen(
         modifier = modifier.safeDrawingPadding(),
         topBar = {
             UnifiedTopBar(
-                title = "操作指南",
+                title = stringResource(R.string.home_guide),
                 showBack = true,
                 leadingIcon = Icons.Filled.ArrowBack,
                 onBack = {
@@ -3111,9 +3105,9 @@ private fun GuideScreen(
                 )
                 SecondaryActionButton(
                     text = when {
-                        guideIsPreparing -> "准备朗读..."
-                        guideIsSpeaking -> "停止朗读"
-                        else -> "朗读本步"
+                        guideIsPreparing -> stringResource(R.string.guide_read_prepare)
+                        guideIsSpeaking -> stringResource(R.string.guide_read_stop)
+                        else -> stringResource(R.string.guide_read_step)
                     },
                     icon = if (guideIsActive) Icons.Filled.Stop else Icons.Filled.PlayArrow,
                     onClick = {
@@ -4968,8 +4962,8 @@ private fun VoiceErrorCard(
 
 @Composable
 private fun VoiceInputPanel(
-    selectedLanguage: String,
-    onLanguageSelected: (String) -> Unit,
+    selectedLanguage: VoiceInputLanguageOption,
+    onLanguageSelected: (VoiceInputLanguageOption) -> Unit,
     isRecording: Boolean,
     enabled: Boolean,
     statusMessage: String?,
@@ -5005,7 +4999,8 @@ private fun VoiceInputPanel(
                         text = if (isRecording) stringResource(R.string.voice_recording_subtitle) else stringResource(R.string.voice_panel_subtitle),
                         color = ElderTextMuted,
                         fontSize = responsive.label,
-                        maxLines = 1,
+                        lineHeight = responsive.label * 1.25,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
@@ -5021,10 +5016,19 @@ private fun VoiceInputPanel(
             }
 
             if (showDebugControls) {
+                val languageLabels = voiceLanguageOptions.associateWith { option ->
+                    stringResource(option.labelResId)
+                }
                 SegmentedControl(
-                    options = voiceLanguageOptions,
-                    selected = selectedLanguage,
-                    onSelected = onLanguageSelected
+                    options = voiceLanguageOptions.map { option -> languageLabels.getValue(option) },
+                    selected = languageLabels.getValue(selectedLanguage),
+                    onSelected = { selectedLabel ->
+                        val selectedOption = languageLabels.entries
+                            .firstOrNull { (_, label) -> label == selectedLabel }
+                            ?.key
+                            ?: selectedLanguage
+                        onLanguageSelected(selectedOption)
+                    }
                 )
             }
 

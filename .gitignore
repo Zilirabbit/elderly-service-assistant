@@ -38,3 +38,6 @@ demo-assets/videos/*
 !demo-assets/videos/.gitkeep
 demo-assets/apk/*
 !demo-assets/apk/.gitkeep
+
+# Packaged submission artifacts
+final_submission_docs.rar

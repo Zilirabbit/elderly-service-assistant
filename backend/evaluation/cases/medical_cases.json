@@ -1,0 +1,66 @@
+[
+  {
+    "id": "medical_hospital_search_001",
+    "category": "医院查询",
+    "question": "广东有哪些医院可以看病？",
+    "expected_keywords": ["医院", "广东", "就医", "门诊", "医疗"],
+    "expected_doc_keywords": ["广东医院", "医院"],
+    "note": "应召回广东医院或就医导航相关内容"
+  },
+  {
+    "id": "medical_elderly_disease_001",
+    "category": "老年常见病",
+    "question": "老人常见慢性病应该去什么科室？",
+    "expected_keywords": ["老年", "慢性病", "科室", "内科", "就医"],
+    "expected_doc_keywords": ["广东医院", "医院"],
+    "note": "应召回老年疾病或科室导航相关内容"
+  },
+  {
+    "id": "medical_oncology_001",
+    "category": "肿瘤治疗",
+    "question": "广东哪里可以咨询肿瘤治疗？",
+    "expected_keywords": ["肿瘤", "治疗", "医院", "专科", "广东"],
+    "expected_doc_keywords": ["广东医院", "医院"],
+    "note": "应召回肿瘤治疗或相关医院片段"
+  },
+  {
+    "id": "medical_rehab_001",
+    "category": "康复服务",
+    "question": "老人康复治疗可以找哪些医院或科室？",
+    "expected_keywords": ["康复", "治疗", "老人", "医院", "科室"],
+    "expected_doc_keywords": ["广东医院", "医院"],
+    "note": "应召回康复服务或康复科相关内容"
+  },
+  {
+    "id": "medical_emergency_001",
+    "category": "急诊就医",
+    "question": "老人突然不舒服应该去急诊还是门诊？",
+    "expected_keywords": ["急诊", "门诊", "医院", "就医", "老人"],
+    "expected_doc_keywords": ["广东医院", "医院"],
+    "note": "应召回急诊或就医导航相关说明"
+  },
+  {
+    "id": "medical_registration_001",
+    "category": "挂号就诊",
+    "question": "去医院看病一般要先挂号吗？",
+    "expected_keywords": ["挂号", "就诊", "门诊", "医院", "预约"],
+    "expected_doc_keywords": ["广东医院", "医院"],
+    "note": "应召回挂号、门诊或就诊流程相关内容"
+  },
+  {
+    "id": "medical_specialist_001",
+    "category": "专科选择",
+    "question": "心脑血管问题应该优先看哪个专科？",
+    "expected_keywords": ["心脑血管", "专科", "内科", "医院", "就医"],
+    "expected_doc_keywords": ["广东医院", "医院"],
+    "note": "应召回心脑血管或专科导航相关内容"
+  },
+  {
+    "id": "medical_fallback_001",
+    "category": "兜底问题",
+    "question": "如果不知道该去哪个医院，应该怎么咨询？",
+    "expected_keywords": ["咨询", "医院", "就医", "门诊", "建议"],
+    "expected_doc_keywords": ["广东医院", "医院"],
+    "note": "知识库无精确匹配时，应召回就医咨询或导航建议"
+  }
+]

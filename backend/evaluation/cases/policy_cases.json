@@ -1,0 +1,146 @@
+[
+  {
+    "id": "permit_apply_basic_001",
+    "category": "港澳通行证办理",
+    "question": "第一次办理港澳通行证要怎么办？",
+    "expected_keywords": ["港澳通行证", "首次", "申请", "出入境", "办理"],
+    "expected_doc_keywords": ["港澳通行证", "办理"],
+    "note": "应召回港澳通行证首次办理或申请流程相关说明"
+  },
+  {
+    "id": "permit_apply_material_001",
+    "category": "首次办理材料",
+    "question": "首次办理港澳通行证需要带哪些材料？",
+    "expected_keywords": ["身份证", "照片", "申请表", "材料", "首次"],
+    "expected_doc_keywords": ["港澳通行证", "办理"],
+    "note": "应召回首次办理材料清单或材料准备说明"
+  },
+  {
+    "id": "permit_endorsement_type_001",
+    "category": "G签/L签区别",
+    "question": "G签和L签有什么区别？",
+    "expected_keywords": ["G签", "L签", "个人旅游", "团队旅游", "签注"],
+    "expected_doc_keywords": ["港澳通行证", "签注"],
+    "note": "应召回签注类型区别说明"
+  },
+  {
+    "id": "permit_endorsement_type_002",
+    "category": "G签/L签区别",
+    "question": "个人旅游签注和团队旅游签注是不是一样？",
+    "expected_keywords": ["个人旅游", "团队旅游", "G签", "L签", "签注"],
+    "expected_doc_keywords": ["港澳通行证", "签注"],
+    "note": "应召回个人旅游与团队旅游签注说明"
+  },
+  {
+    "id": "permit_renewal_001",
+    "category": "签注续签",
+    "question": "港澳通行证签注到期了怎么续签？",
+    "expected_keywords": ["续签", "签注", "到期", "出入境", "办理"],
+    "expected_doc_keywords": ["港澳通行证", "签注"],
+    "note": "应召回签注续签或重新办理说明"
+  },
+  {
+    "id": "permit_renewal_002",
+    "category": "签注续签",
+    "question": "通行证还没过期，只是签注用完了，还需要重新办证吗？",
+    "expected_keywords": ["签注", "用完", "重新", "续签", "通行证"],
+    "expected_doc_keywords": ["港澳通行证", "签注"],
+    "note": "应召回证件与签注关系说明"
+  },
+  {
+    "id": "permit_fee_001",
+    "category": "办理费用",
+    "question": "办理港澳通行证多少钱？",
+    "expected_keywords": ["费用", "收费", "工本费", "60元", "15元", "签注"],
+    "expected_doc_keywords": ["港澳通行证", "办理"],
+    "note": "应召回证件工本费和签注费用相关片段"
+  },
+  {
+    "id": "permit_fee_002",
+    "category": "办理费用",
+    "question": "港澳通行证签注收费标准是多少？",
+    "expected_keywords": ["签注", "收费", "费用", "15元", "每件"],
+    "expected_doc_keywords": ["港澳通行证", "签注"],
+    "note": "应召回签注收费相关说明"
+  },
+  {
+    "id": "permit_time_001",
+    "category": "办理时限",
+    "question": "港澳通行证一般多久能办好？",
+    "expected_keywords": ["时限", "工作日", "办理", "领取", "出入境"],
+    "expected_doc_keywords": ["港澳通行证", "办理"],
+    "note": "应召回办理时限或领取时间说明"
+  },
+  {
+    "id": "permit_time_002",
+    "category": "办理时限",
+    "question": "签注续签需要等多少天？",
+    "expected_keywords": ["签注", "续签", "工作日", "时限", "办理"],
+    "expected_doc_keywords": ["港澳通行证", "签注"],
+    "note": "应召回签注办理时限说明"
+  },
+  {
+    "id": "permit_expired_001",
+    "category": "证件过期",
+    "question": "港澳通行证过期了还能继续用吗？",
+    "expected_keywords": ["过期", "有效期", "重新", "换发", "办理"],
+    "expected_doc_keywords": ["港澳通行证", "办理"],
+    "note": "应召回证件过期或换发相关说明"
+  },
+  {
+    "id": "permit_expired_002",
+    "category": "证件过期",
+    "question": "通行证快到期了，签注还能办吗？",
+    "expected_keywords": ["有效期", "到期", "签注", "通行证", "换发"],
+    "expected_doc_keywords": ["港澳通行证", "签注"],
+    "note": "应召回证件有效期与签注办理关系说明"
+  },
+  {
+    "id": "permit_business_001",
+    "category": "商务签注",
+    "question": "商务签注可以停留多久？",
+    "expected_keywords": ["商务签注", "商务", "停留", "14天", "签注"],
+    "expected_doc_keywords": ["商务签注", "港澳通行证", "签注"],
+    "note": "应召回商务签注停留时间说明"
+  },
+  {
+    "id": "permit_business_002",
+    "category": "商务签注",
+    "question": "办理商务签注需要单位证明吗？",
+    "expected_keywords": ["商务签注", "单位证明", "备案", "材料", "商务事由"],
+    "expected_doc_keywords": ["商务签注", "港澳通行证", "签注"],
+    "note": "应召回商务签注材料或备案要求说明"
+  },
+  {
+    "id": "elderly_clearance_001",
+    "category": "老年人通关便利",
+    "question": "老人过关有没有人工通道或者便利服务？",
+    "expected_keywords": ["老年人", "老人", "人工通道", "便利", "通关"],
+    "expected_doc_keywords": ["港澳", "通关", "养老", "服务"],
+    "note": "应召回老年人通关便利或服务提示"
+  },
+  {
+    "id": "border_material_001",
+    "category": "过关材料准备",
+    "question": "去香港澳门过关前要准备什么证件？",
+    "expected_keywords": ["港澳通行证", "签注", "有效期", "证件", "过关"],
+    "expected_doc_keywords": ["港澳通行证", "通关", "签注"],
+    "note": "应召回出行前证件和签注检查说明"
+  },
+  {
+    "id": "border_material_002",
+    "category": "过关材料准备",
+    "question": "出发前怎么确认自己的签注还能不能用？",
+    "expected_keywords": ["签注", "有效期", "次数", "目的地", "出行前"],
+    "expected_doc_keywords": ["港澳通行证", "签注"],
+    "note": "应召回签注有效期、次数、目的地检查说明"
+  },
+  {
+    "id": "fallback_unknown_001",
+    "category": "兜底问题",
+    "question": "港澳通行证可以用来办理澳门养老院入住吗？",
+    "expected_keywords": ["以当地", "咨询", "窗口", "最新要求", "无法确定", "养老院"],
+    "expected_doc_keywords": ["港澳", "养老", "通行证"],
+    "note": "知识库无明确答案时，应召回相关背景或给出需人工确认的兜底资料"
+  }
+]
